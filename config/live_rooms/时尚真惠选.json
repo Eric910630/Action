@@ -1,0 +1,49 @@
+{
+  "basic_info": {
+    "name": "时尚真惠选",
+    "category": "女装",
+    "ip_character": "交个朋友",
+    "style": "时尚潮流、甜酷穿搭、中性穿搭、运动户外"
+  },
+  "keywords": [
+    "时尚",
+    "穿搭",
+    "搭配",
+    "潮流",
+    "风格",
+    "美",
+    "好看",
+    "推荐",
+    "分享",
+    "日常",
+    "生活",
+    "品质",
+    "性价比"
+  ],
+  "audience_profile": {
+    "follower_count": "未知",
+    "gender_ratio": {
+      "female": 0.5,
+      "male": 0.5
+    },
+    "age_distribution": {},
+    "fan_structure": {}
+  },
+  "product_categories": {
+    "primary": [
+      "女装"
+    ],
+    "secondary": [],
+    "occasional": []
+  },
+  "content_style": {
+    "tone": "",
+    "format": [],
+    "key_elements": []
+  },
+  "live_streaming_style": {
+    "duration": "2-3小时",
+    "peak_hours": [],
+    "interaction_style": ""
+  }
+}

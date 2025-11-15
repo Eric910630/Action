@@ -1,0 +1,46 @@
+{
+  "basic_info": {
+    "name": "生活真惠选",
+    "category": "智能家居、3C数码家电",
+    "ip_character": "交个朋友",
+    "style": "生活耐消品直播间，主要针对家居家装人群，热爱生活"
+  },
+  "keywords": [
+    "家具",
+    "家居",
+    "生活",
+    "舒适",
+    "推荐",
+    "分享",
+    "日常",
+    "品质",
+    "实用",
+    "设计"
+  ],
+  "audience_profile": {
+    "follower_count": "未知",
+    "gender_ratio": {
+      "female": 0.5,
+      "male": 0.5
+    },
+    "age_distribution": {},
+    "fan_structure": {}
+  },
+  "product_categories": {
+    "primary": [
+      "智能家居、3C数码家电"
+    ],
+    "secondary": [],
+    "occasional": []
+  },
+  "content_style": {
+    "tone": "",
+    "format": [],
+    "key_elements": []
+  },
+  "live_streaming_style": {
+    "duration": "2-3小时",
+    "peak_hours": [],
+    "interaction_style": ""
+  }
+}

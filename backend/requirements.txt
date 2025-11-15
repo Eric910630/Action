@@ -1,0 +1,64 @@
+# FastAPI核心
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+python-multipart==0.0.19
+pydantic==2.9.2
+pydantic-settings==2.5.2
+
+# 数据库
+sqlalchemy==2.0.35
+alembic==1.13.2
+psycopg2-binary==2.9.9  # PostgreSQL驱动 (PolarDB兼容)
+cryptography==43.0.1
+
+# Redis
+redis==5.2.0
+hiredis==2.3.2
+
+# 任务队列
+celery==5.4.0
+flower==2.0.1
+
+# HTTP客户端
+httpx==0.27.2
+aiohttp==3.10.11
+
+# AI/ML
+openai==1.56.1  # DeepSeek兼容OpenAI API
+langchain==0.3.7
+langchain-openai==0.2.8
+numpy==1.26.4  # 用于向量计算
+
+# 工具库
+python-dotenv==1.0.1
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-dateutil==2.9.0.post0
+
+# 日志
+loguru==0.7.3
+
+# 工具
+pytz==2024.2
+pyyaml==6.0.2
+jinja2==3.1.4
+
+# 视频分析工具
+scenedetect[opencv]>=0.6.2  # 场景检测
+openai-whisper>=20231117  # 语音转文字
+moviepy==1.0.3  # 视频处理（注意：2.x版本API有变化，使用1.0.3）
+opencv-python>=4.8.0  # 图像处理（PySceneDetect依赖）
+
+# 网页内容提取工具
+trafilatura>=1.6.0  # 网页主要内容提取（替代Firecrawl的免费方案）
+lxml_html_clean>=0.4.0  # Trafilatura的依赖
+
+# 开发工具
+pytest==8.3.3
+pytest-asyncio==0.24.0
+pytest-cov==5.0.0  # 测试覆盖率
+httpx==0.27.2  # FastAPI TestClient需要
+black==24.10.0
+flake8==7.1.1
+mypy==1.11.2
+

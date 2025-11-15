@@ -1,0 +1,130 @@
+:root {
+  /* 渐变背景 */
+  --gradient-bg: linear-gradient(to bottom right, #fdf2f8, #ffffff, #fff7ed);
+  
+  /* 玻璃态效果 */
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-blur: blur(20px);
+  --glass-bg-light: rgba(255, 255, 255, 0.7);
+  --glass-blur-light: blur(10px);
+  
+  /* 渐变按钮 */
+  --gradient-button: linear-gradient(to right, #f472b6, #fb923c);
+  --gradient-button-hover: linear-gradient(to right, #ec4899, #f97316);
+  
+  /* 圆角 */
+  --radius-3xl: 1.5rem;
+  --radius-2xl: 1rem;
+  --radius-xl: 0.75rem;
+  --radius-lg: 0.625rem;
+  
+  /* 阴影 */
+  --shadow-pink: 0 10px 15px -3px rgba(244, 114, 182, 0.2);
+  --shadow-pink-lg: 0 20px 25px -5px rgba(244, 114, 182, 0.3);
+  --shadow-card: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  
+  /* Pantone 暖色调（用于图表） */
+  --pantone-warm-1: rgba(255, 111, 97, 0.6);
+  --pantone-warm-2: rgba(255, 158, 121, 0.6);
+  --pantone-warm-3: rgba(255, 192, 120, 0.6);
+  --pantone-warm-4: rgba(255, 214, 122, 0.6);
+  --pantone-warm-5: rgba(247, 127, 127, 0.6);
+  --pantone-warm-6: rgba(230, 126, 161, 0.6);
+  --pantone-warm-7: rgba(218, 142, 204, 0.6);
+  
+  /* 文本颜色 */
+  --text-primary: #030213;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+  
+  /* 边框颜色 */
+  --border-light: rgba(0, 0, 0, 0.05);
+  --border-medium: rgba(0, 0, 0, 0.1);
+}
+
+/* 玻璃态效果类 */
+.glass {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  background: var(--glass-bg-light);
+}
+
+.glass-strong {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  background: var(--glass-bg);
+}
+
+/* 渐变按钮类 */
+.gradient-button {
+  background: var(--gradient-button) !important;
+  border: none !important;
+  color: white !important;
+  box-shadow: var(--shadow-pink) !important;
+  transition: all 0.2s ease !important;
+}
+
+.gradient-button:hover {
+  background: var(--gradient-button-hover) !important;
+  box-shadow: var(--shadow-pink-lg) !important;
+  transform: translateY(-1px);
+}
+
+.gradient-button:active {
+  transform: translateY(0);
+}
+
+/* 设计卡片类 */
+.design-card {
+  border-radius: var(--radius-3xl);
+  box-shadow: var(--shadow-card);
+  border: 1px solid var(--border-light);
+  background: white;
+}
+
+.design-card-sm {
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-lg);
+  border: 1px solid var(--border-light);
+  background: white;
+}
+
+/* 渐变背景 */
+.gradient-bg {
+  background: var(--gradient-bg);
+}
+
+/* 状态标签样式 */
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 9999px;
+  font-size: 14px;
+  font-weight: 500;
+  display: inline-block;
+}
+
+.status-pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.status-processing {
+  background: #dbeafe;
+  color: #1e40af;
+}
+
+.status-completed {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-failed {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+

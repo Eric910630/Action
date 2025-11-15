@@ -1,0 +1,48 @@
+{
+  "basic_info": {
+    "name": "美妆真惠选",
+    "category": "美妆护肤",
+    "ip_character": "交个朋友",
+    "style": "美丽时尚、院线医美、居家保养、都市丽人"
+  },
+  "keywords": [
+    "美妆",
+    "护肤",
+    "化妆",
+    "美容",
+    "保养",
+    "推荐",
+    "好用",
+    "效果",
+    "分享",
+    "日常",
+    "生活",
+    "品质"
+  ],
+  "audience_profile": {
+    "follower_count": "未知",
+    "gender_ratio": {
+      "female": 0.5,
+      "male": 0.5
+    },
+    "age_distribution": {},
+    "fan_structure": {}
+  },
+  "product_categories": {
+    "primary": [
+      "美妆护肤"
+    ],
+    "secondary": [],
+    "occasional": []
+  },
+  "content_style": {
+    "tone": "",
+    "format": [],
+    "key_elements": []
+  },
+  "live_streaming_style": {
+    "duration": "2-3小时",
+    "peak_hours": [],
+    "interaction_style": ""
+  }
+}

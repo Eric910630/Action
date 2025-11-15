@@ -1,0 +1,141 @@
+version: '3.8'
+
+# 使用PolarDB的简化版docker-compose配置
+# 注意：此配置不包含PostgreSQL服务，使用外部的PolarDB
+
+services:
+  # Redis（仍然需要，用于Celery）
+  redis:
+    image: redis:7.0-alpine
+    container_name: vtics-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - vtics-network
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 后端API服务（连接到PolarDB）
+  backend:
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.backend
+    container_name: vtics-backend
+    ports:
+      - "8001:8001"
+    env_file:
+      - ../backend/.env  # 从.env文件读取配置（包括PolarDB连接信息）
+    environment:
+      # Redis配置
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      # Open-WebSearch配置
+      - OPEN_WEBSEARCH_MCP_URL=http://open-websearch:3000/mcp
+    volumes:
+      - ../backend:/app
+      - uploads_data:/app/uploads
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - vtics-network
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8001"
+
+  # Celery Worker（连接到PolarDB）
+  celery-worker:
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.backend
+    container_name: vtics-celery-worker
+    env_file:
+      - ../backend/.env
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      # Open-WebSearch配置
+      - OPEN_WEBSEARCH_MCP_URL=http://open-websearch:3000/mcp
+    volumes:
+      - ../backend:/app
+      - uploads_data:/app/uploads
+    depends_on:
+      - redis
+      - backend
+      - open-websearch
+    networks:
+      - vtics-network
+    command: celery -A app.celery_app worker --loglevel=info --pool=solo
+
+  # Celery Beat（连接到PolarDB）
+  celery-beat:
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.backend
+    container_name: vtics-celery-beat
+    env_file:
+      - ../backend/.env
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    volumes:
+      - ../backend:/app
+    depends_on:
+      - redis
+      - backend
+    networks:
+      - vtics-network
+    command: celery -A app.celery_app beat --loglevel=info
+
+  # Open-WebSearch MCP Server（Web搜索服务）
+  open-websearch:
+    image: ghcr.io/aas-ee/open-web-search:latest
+    container_name: vtics-open-websearch
+    ports:
+      - "3000:3000"
+    environment:
+      - ENABLE_CORS=true
+      - CORS_ORIGIN=*
+      - DEFAULT_SEARCH_ENGINE=bing
+      - PORT=3000
+    networks:
+      - vtics-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/mcp"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 前端服务（Nginx）
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: ../docker/Dockerfile.frontend
+    container_name: vtics-frontend
+    ports:
+      - "3001:80"
+    depends_on:
+      - backend
+      - open-websearch
+    networks:
+      - vtics-network
+
+volumes:
+  redis_data:
+  uploads_data:
+
+networks:
+  vtics-network:
+    driver: bridge
+

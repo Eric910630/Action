@@ -1,0 +1,156 @@
+version: '3.8'
+
+services:
+  # PostgreSQL数据库
+  postgres:
+    image: postgres:15-alpine
+    container_name: vtics-postgres
+    environment:
+      POSTGRES_USER: vtics
+      POSTGRES_PASSWORD: vtics123
+      POSTGRES_DB: vtics
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - vtics-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vtics"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis
+  redis:
+    image: redis:7.0-alpine
+    container_name: vtics-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - vtics-network
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 后端API服务
+  backend:
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.backend
+    container_name: vtics-backend
+    ports:
+      - "8001:8001"
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://vtics:vtics123@postgres:5432/vtics
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - OPEN_WEBSEARCH_MCP_URL=http://open-websearch:3000/mcp
+    volumes:
+      - ../backend:/app
+      - uploads_data:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - vtics-network
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8001"
+
+  # Celery Worker
+  celery-worker:
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.backend
+    container_name: vtics-celery-worker
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://vtics:vtics123@postgres:5432/vtics
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+      - OPEN_WEBSEARCH_MCP_URL=http://open-websearch:3000/mcp
+    volumes:
+      - ../backend:/app
+      - uploads_data:/app/uploads
+    depends_on:
+      - postgres
+      - redis
+      - backend
+    networks:
+      - vtics-network
+    command: celery -A app.celery_app worker --loglevel=info --pool=solo
+
+  # Celery Beat (定时任务)
+  celery-beat:
+    build:
+      context: ../backend
+      dockerfile: ../docker/Dockerfile.backend
+    container_name: vtics-celery-beat
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://vtics:vtics123@postgres:5432/vtics
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - CELERY_BROKER_URL=redis://redis:6379/0
+      - CELERY_RESULT_BACKEND=redis://redis:6379/0
+    volumes:
+      - ../backend:/app
+    depends_on:
+      - postgres
+      - redis
+      - backend
+    networks:
+      - vtics-network
+    command: celery -A app.celery_app beat --loglevel=info
+
+  # Open-WebSearch MCP Server（Web搜索服务）
+  open-websearch:
+    image: ghcr.io/aas-ee/open-web-search:latest
+    container_name: vtics-open-websearch
+    ports:
+      - "3000:3000"
+    environment:
+      - ENABLE_CORS=true
+      - CORS_ORIGIN=*
+      - DEFAULT_SEARCH_ENGINE=bing
+      - PORT=3000
+    networks:
+      - vtics-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/mcp"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # 前端服务（Nginx）
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: ../docker/Dockerfile.frontend
+    container_name: vtics-frontend
+    ports:
+      - "3001:80"
+    depends_on:
+      - backend
+      - open-websearch
+    networks:
+      - vtics-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads_data:
+
+networks:
+  vtics-network:
+    driver: bridge
+

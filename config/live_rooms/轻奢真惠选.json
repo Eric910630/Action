@@ -1,0 +1,46 @@
+{
+  "basic_info": {
+    "name": "轻奢真惠选",
+    "category": "奢侈品",
+    "ip_character": "交个朋友",
+    "style": "高端精致、悦己者、轻奢享受"
+  },
+  "keywords": [
+    "轻奢",
+    "品质",
+    "精致",
+    "推荐",
+    "分享",
+    "日常",
+    "生活",
+    "品牌",
+    "设计",
+    "格调"
+  ],
+  "audience_profile": {
+    "follower_count": "未知",
+    "gender_ratio": {
+      "female": 0.5,
+      "male": 0.5
+    },
+    "age_distribution": {},
+    "fan_structure": {}
+  },
+  "product_categories": {
+    "primary": [
+      "奢侈品"
+    ],
+    "secondary": [],
+    "occasional": []
+  },
+  "content_style": {
+    "tone": "",
+    "format": [],
+    "key_elements": []
+  },
+  "live_streaming_style": {
+    "duration": "2-3小时",
+    "peak_hours": [],
+    "interaction_style": ""
+  }
+}

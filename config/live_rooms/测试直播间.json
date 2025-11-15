@@ -1,0 +1,38 @@
+{
+  "basic_info": {
+    "name": "测试直播间",
+    "category": "测试",
+    "ip_character": "测试IP",
+    "style": "测试风格"
+  },
+  "keywords": [
+    "测试",
+    "关键词"
+  ],
+  "audience_profile": {
+    "follower_count": "未知",
+    "gender_ratio": {
+      "female": 0.5,
+      "male": 0.5
+    },
+    "age_distribution": {},
+    "fan_structure": {}
+  },
+  "product_categories": {
+    "primary": [
+      "测试"
+    ],
+    "secondary": [],
+    "occasional": []
+  },
+  "content_style": {
+    "tone": "",
+    "format": [],
+    "key_elements": []
+  },
+  "live_streaming_style": {
+    "duration": "2-3小时",
+    "peak_hours": [],
+    "interaction_style": ""
+  }
+}

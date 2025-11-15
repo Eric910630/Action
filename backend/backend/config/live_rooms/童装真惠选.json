@@ -1,0 +1,47 @@
+{
+  "basic_info": {
+    "name": "童装真惠选",
+    "category": "儿童服饰、母婴宠物",
+    "ip_character": "交个朋友",
+    "style": "亲子生活、母婴用品、婴童用品、儿童服饰、亲子服饰"
+  },
+  "keywords": [
+    "儿童",
+    "宝宝",
+    "亲子",
+    "家庭",
+    "成长",
+    "推荐",
+    "分享",
+    "日常",
+    "生活",
+    "品质",
+    "安全"
+  ],
+  "audience_profile": {
+    "follower_count": "未知",
+    "gender_ratio": {
+      "female": 0.5,
+      "male": 0.5
+    },
+    "age_distribution": {},
+    "fan_structure": {}
+  },
+  "product_categories": {
+    "primary": [
+      "儿童服饰、母婴宠物"
+    ],
+    "secondary": [],
+    "occasional": []
+  },
+  "content_style": {
+    "tone": "",
+    "format": [],
+    "key_elements": []
+  },
+  "live_streaming_style": {
+    "duration": "2-3小时",
+    "peak_hours": [],
+    "interaction_style": ""
+  }
+}
