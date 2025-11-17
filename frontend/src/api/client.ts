@@ -1,4 +1,4 @@
-import axios from 'axios'
+import axios, { AxiosInstance, AxiosResponse, InternalAxiosRequestConfig } from 'axios'
 
 const apiClient = axios.create({
   baseURL: '/api/v1',
@@ -35,5 +35,17 @@ apiClient.interceptors.response.use(
   }
 )
 
-export default apiClient
+// 类型包装：由于响应拦截器返回response.data，所以实际返回类型是T而不是AxiosResponse<T>
+// 这里创建一个类型包装器来正确声明返回类型
+interface ApiClient {
+  get<T = any>(url: string, config?: any): Promise<T>
+  post<T = any>(url: string, data?: any, config?: any): Promise<T>
+  put<T = any>(url: string, data?: any, config?: any): Promise<T>
+  delete<T = any>(url: string, config?: any): Promise<T>
+}
+
+// 将apiClient转换为正确的类型
+const typedApiClient = apiClient as unknown as ApiClient
+
+export default typedApiClient
 
