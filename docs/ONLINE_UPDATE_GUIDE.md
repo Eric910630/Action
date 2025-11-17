@@ -5,10 +5,10 @@
 ### 1. 确认服务器信息
 
 ```bash
-# 服务器IP地址（示例，请替换为实际IP）
-SERVER_IP="你的服务器IP"
+# 服务器IP地址
+SERVER_IP="39.102.60.67"
 
-# 或者使用域名
+# 或者使用域名（如果有）
 SERVER_DOMAIN="你的域名"
 ```
 
@@ -33,10 +33,10 @@ git log --oneline -3
 
 ```bash
 # 使用SSH连接到服务器
-ssh root@你的服务器IP
+ssh root@39.102.60.67
 
 # 如果使用密钥认证
-ssh -i ~/.ssh/your_key root@你的服务器IP
+ssh -i ~/.ssh/your_key root@39.102.60.67
 
 # 如果使用域名
 ssh root@你的域名
@@ -259,7 +259,7 @@ curl http://localhost:8001/health
 # 应该返回：{"status": "healthy"} 或类似
 
 # 2. 检查前端（在浏览器中访问）
-# http://你的域名 或 http://服务器IP
+# http://39.102.60.67 或 http://你的域名
 
 # 3. 测试PDF导出功能
 # 在浏览器中进入脚本管理页面，点击"导出PDF"按钮
@@ -436,8 +436,8 @@ npm run build
 如果服务器已经配置好，可以使用以下命令快速更新：
 
 ```bash
-# 复制以下命令到服务器执行
-cd /root/Action && \
+# 复制以下命令到服务器执行（SSH连接后）
+ssh root@39.102.60.67 "cd /root/Action && \
 git pull origin main && \
 cd backend && \
 source venv/bin/activate && \
@@ -450,8 +450,8 @@ npm install --silent && \
 npm run build && \
 sudo cp -r dist/* /var/www/action-script/ && \
 sudo chown -R www-data:www-data /var/www/action-script && \
-echo "✅ 更新完成！" && \
-systemctl status action-backend --no-pager -l | head -10
+echo '✅ 更新完成！' && \
+systemctl status action-backend --no-pager -l | head -10"
 ```
 
 ---
