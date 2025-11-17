@@ -151,6 +151,27 @@ cd /root/Action/docker
 docker-compose exec backend alembic upgrade head
 ```
 
+### 第五步（续）：初始化种子数据
+
+```bash
+# 在服务器上（如果使用Docker）
+cd /root/Action/docker
+docker-compose exec backend python3 -m app.services.data.seed
+
+# 或如果使用非Docker部署
+cd /root/Action/backend
+source venv/bin/activate
+python3 -m app.services.data.seed
+```
+
+**验证种子数据**：
+```bash
+# 验证直播间是否创建成功
+curl http://localhost/api/v1/live-rooms/ | python3 -m json.tool
+```
+
+应该看到7个初始直播间（时尚真惠选、好物真惠选等）。
+
 ### 第六步：配置Nginx反向代理
 
 ```bash

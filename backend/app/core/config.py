@@ -10,8 +10,8 @@ class Settings(BaseSettings):
     """应用配置"""
     
     # 应用基础配置
-    APP_NAME: str = "VTICS"
-    APP_VERSION: str = "0.1.0"
+    APP_NAME: str = "Action 1.0"
+    APP_VERSION: str = "1.0.0"
     DEBUG: bool = False
     
     # API配置

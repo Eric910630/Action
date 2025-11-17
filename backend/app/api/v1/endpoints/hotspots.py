@@ -120,12 +120,12 @@ async def fetch_hotspots(
     手动触发热点抓取（使用语义筛选）
     
     Args:
-        platform: 平台标识，如果为None则抓取多个平台（douyin, zhihu, weibo, bilibili）
+        platform: 平台标识，如果为None则抓取多个平台（douyin, zhihu, weibo, bilibili, xiaohongshu）
         live_room_id: 直播间ID
     """
     # 异步触发Celery任务
     task = fetch_daily_hotspots.delay(platform=platform, live_room_id=live_room_id)
-    platforms_info = "多个平台（douyin, zhihu, weibo, bilibili）" if platform is None else platform
+    platforms_info = "多个平台（douyin, zhihu, weibo, bilibili, xiaohongshu）" if platform is None else platform
     return {
         "message": f"热点抓取任务已启动（{platforms_info}，使用语义关联度筛选）",
         "platform": platform,
@@ -212,13 +212,35 @@ async def get_hotspots_visualization(
                     should_exclude = True
                     continue  # 直接跳过，不进入预筛选
             
-            # 快速检查：关键词匹配或类目匹配，或者有match_score（说明已经通过语义筛选）
+            # 信任LLM的判断：如果热点有content_analysis且电商适配性>=0.3，就进入匹配计算
+            # 不再要求标题中必须包含关键词或类目词，因为LLM已经通过语义分析识别出了适用类目
+            has_ecommerce_potential = False
+            if hotspot.content_analysis:
+                try:
+                    content_analysis = hotspot.content_analysis
+                    if isinstance(content_analysis, str):
+                        import json
+                        content_analysis = json.loads(content_analysis)
+                    
+                    ecommerce_fit = content_analysis.get("ecommerce_fit", {})
+                    if isinstance(ecommerce_fit, dict):
+                        ecommerce_score = float(ecommerce_fit.get("score", 0.0))
+                        # 如果电商适配性>=0.3，认为有潜在价值，进入匹配计算
+                        if ecommerce_score >= 0.3:
+                            has_ecommerce_potential = True
+                except Exception:
+                    pass
+            
+            # 预筛选条件：
+            # 1. 有电商适配性潜力（>=0.3）- 信任LLM的判断
+            # 2. 或者有match_score（已通过语义筛选）
+            # 3. 或者有关键词/类目匹配（保留作为补充，但不作为必要条件）
             keyword_match = any(kw.lower() in hotspot_text for kw in keywords) if keywords else False
             category_match = any(cat.strip().lower() in hotspot_text for cat in category.split('、')) if category else False
             has_match_score = hotspot.match_score is not None and hotspot.match_score > 0
             
-            # 放宽筛选：有关键词/类目匹配，或者有match_score（已通过语义筛选）的热点都进入预筛选
-            if keyword_match or category_match or has_match_score:
+            # 信任LLM的判断：有电商适配性潜力就进入匹配计算
+            if has_ecommerce_potential or has_match_score or keyword_match or category_match:
                 prefiltered_hotspots.append(hotspot)
         
         # 如果预筛选后还是太多，限制数量（减少预筛选数量，提高筛选质量）
@@ -288,14 +310,14 @@ async def get_hotspots_visualization(
                         ecommerce_score = float(ecommerce_fit.get("score", 0.0))
                         
                         # 检查适用类目是否与直播间类目匹配
-                        # 信任LLM的判断，直接使用ContentAnalysisAgent给出的适用类目
+                        # **重要：不再使用硬编码的同义词映射，而是依赖RelevanceAnalysisAgent的最终判断**
+                        # 如果Agent判断不相关，即使适用类目有匹配，也不应该匹配
                         applicable_categories = ecommerce_fit.get("applicable_categories", [])
                         if applicable_categories and category:
-                            # 检查直播间类目是否在适用类目中（直接文本匹配）
                             category_keywords = [cat.strip().lower() for cat in category.split('、')]
                             
-                            # 直接匹配：检查直播间类目关键词是否在适用类目中
-                            # 相信LLM已经做了智能判断，不需要硬编码的映射
+                            # 只进行直接文本匹配（精确匹配，避免误匹配）
+                            # **不再使用同义词映射，避免"运动鞋服"通过"服饰"匹配到"女装"**
                             matched_categories = [
                                 app_cat for app_cat in applicable_categories
                                 if any(cat_kw in app_cat.lower() or app_cat.lower() in cat_kw 
@@ -303,10 +325,12 @@ async def get_hotspots_visualization(
                             ]
                             
                             if matched_categories:
+                                # 直接匹配成功，给满分
                                 applicable_categories_match = 1.0
                             else:
-                                # 如果适用类目与直播间类目完全不匹配，不给分数
-                                # 相信LLM的判断：如果LLM没有将直播间类目列为适用类目，说明不相关
+                                # 直接匹配失败，不给分数
+                                # **不再使用同义词映射或embedding，避免误匹配**
+                                # **依赖RelevanceAnalysisAgent的最终判断**
                                 applicable_categories_match = 0.0
                 except Exception as e:
                     print(f"[匹配度计算] 解析content_analysis失败: {e}")
@@ -317,31 +341,78 @@ async def get_hotspots_visualization(
             # 5. 如果热点已经有match_score（从语义筛选中获得），使用它作为基础
             base_match_score = hotspot.match_score if hotspot.match_score and hotspot.match_score > 0 else 0.0
             
-            # 综合计算匹配度（优化版）
-            # 如果已有match_score，则使用它（50%）+ 快速匹配分数（50%）
-            # 如果没有match_score，则使用快速匹配分数
-            if base_match_score > 0:
-                quick_match_score = (
-                    keyword_score * 0.3 +
-                    category_score * 0.15 +
-                    semantic_score * 0.15 +
-                    ecommerce_score * 0.3 +  # 电商适配性权重提升
-                    applicable_categories_match * 0.1  # 适用类目匹配
-                )
-                match_score = base_match_score * 0.5 + quick_match_score * 0.5
-            else:
-                # 没有base_match_score时，使用优化后的快速匹配分数
-                match_score = (
-                    keyword_score * 0.25 +
-                    category_score * 0.15 +
-                    semantic_score * 0.15 +
-                    ecommerce_score * 0.35 +  # 电商适配性权重最高
-                    applicable_categories_match * 0.1  # 适用类目匹配
-                )
+            # 综合计算匹配度（优化版：信任LLM的判断）
+            # 新权重分配：
+            # 1. 内容迁移潜力（60%）- LLM的电商适配性判断，这是最智能的部分
+            # 2. 语义关联（25%）- 使用embedding或Agent计算的语义相似度
+            # 3. 直接关联（10%）- 关键词+类目匹配（硬编码，权重降低）
+            # 4. 适用类目匹配（5%）- LLM识别的适用类目与直播间类目的匹配度
             
-            # 如果电商适配性很高（>=70%）且适用类目有匹配，即使关键词/类目不匹配，也给予基础分数
-            # 但如果适用类目完全不匹配，不应该给保底分数
-            if ecommerce_score >= 0.7 and applicable_categories_match > 0 and match_score < 0.3:
+            # 计算内容迁移潜力（基于电商适配性，如果有适用类目匹配则加权）
+            content_migration_potential = ecommerce_score
+            if applicable_categories_match > 0:
+                # 如果适用类目有匹配，说明LLM认为这个热点确实适合这个直播间，加权
+                content_migration_potential = min(1.0, ecommerce_score * 1.1)
+            
+            # 计算语义关联（如果有base_match_score，使用它；否则使用关键词匹配作为简单代理）
+            semantic_relevance = base_match_score if base_match_score > 0 else (keyword_score * 0.5 + category_score * 0.5)
+            
+            # 计算直接关联（关键词+类目匹配）
+            direct_relevance = (keyword_score * 0.6 + category_score * 0.4)
+            
+            # 重要：当没有直接关联时（关键词和类目匹配都为0），应该降低内容迁移潜力的权重
+            has_direct_match = keyword_score > 0 or category_score > 0
+            
+            # 综合匹配度计算（优化版：当没有直接关联时，降低匹配度）
+            if base_match_score > 0:
+                # 如果有base_match_score，说明已经通过Agent计算过语义匹配，使用它
+                if has_direct_match:
+                    # 有直接关联时，使用正常权重
+                    match_score = (
+                        content_migration_potential * 0.50 +  # 内容迁移潜力（降低权重）
+                        base_match_score * 0.25 +              # 语义关联（使用Agent的结果）
+                        direct_relevance * 0.15 +              # 直接关联（提高权重）
+                        applicable_categories_match * 0.10     # 适用类目匹配（提高权重）
+                    )
+                else:
+                    # 没有直接关联时，大幅降低内容迁移潜力的权重，提高适用类目匹配的权重
+                    match_score = (
+                        content_migration_potential * 0.30 +  # 内容迁移潜力（大幅降低权重）
+                        base_match_score * 0.20 +              # 语义关联（降低权重）
+                        direct_relevance * 0.15 +              # 直接关联（保持）
+                        applicable_categories_match * 0.35     # 适用类目匹配（大幅提高权重，因为这是唯一的关联）
+                    )
+            else:
+                # 没有base_match_score时，使用优化后的权重
+                if has_direct_match:
+                    # 有直接关联时，使用正常权重
+                    match_score = (
+                        content_migration_potential * 0.50 +  # 内容迁移潜力（降低权重）
+                        semantic_relevance * 0.25 +            # 语义关联（简化版）
+                        direct_relevance * 0.15 +              # 直接关联（提高权重）
+                        applicable_categories_match * 0.10     # 适用类目匹配（提高权重）
+                    )
+                else:
+                    # 没有直接关联时，大幅降低内容迁移潜力的权重，提高适用类目匹配的权重
+                    match_score = (
+                        content_migration_potential * 0.30 +  # 内容迁移潜力（大幅降低权重）
+                        semantic_relevance * 0.20 +            # 语义关联（降低权重）
+                        direct_relevance * 0.15 +              # 直接关联（保持）
+                        applicable_categories_match * 0.35     # 适用类目匹配（大幅提高权重，因为这是唯一的关联）
+                    )
+            
+            # 重要：当没有直接关联时，即使适用类目有匹配，也应该设置上限
+            # 避免间接关联的热点匹配度过高
+            if not has_direct_match:
+                # 没有直接关联时，匹配度上限为50%
+                match_score = min(match_score, 0.5)
+                # 如果适用类目匹配是通过同义词（0.8），进一步降低
+                if applicable_categories_match == 0.8:
+                    match_score = min(match_score, 0.4)  # 同义词匹配上限40%
+            
+            # 如果内容迁移潜力很高（>=0.6）且适用类目有匹配，即使直接关联度低，也给予基础分数
+            # 这体现了对LLM判断的信任，但只在有直接关联时生效
+            if has_direct_match and content_migration_potential >= 0.6 and applicable_categories_match > 0 and match_score < 0.3:
                 match_score = max(match_score, 0.3)  # 至少30%匹配度
             
             # 不再给0匹配度的热点最小分数，避免低匹配度热点过多

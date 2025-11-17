@@ -1,7 +1,7 @@
 #!/bin/bash
 # 启动开发服务器
 
-echo "启动VTICS后端服务..."
+echo "启动Action后端服务..."
 
 # 检查虚拟环境
 if [ ! -d "venv" ]; then

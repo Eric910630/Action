@@ -37,23 +37,32 @@ async def get_live_rooms(
     db: Session = Depends(get_db)
 ):
     """获取直播间列表"""
-    rooms = service.get_live_rooms(db, category)
-    
-    return {
-        "items": [
-            {
-                "id": r.id,
-                "name": r.name,
-                "category": r.category,
-                "keywords": r.keywords,
-                "ip_character": r.ip_character,
-                "style": r.style,
-                "created_at": r.created_at.isoformat(),
-                "updated_at": r.updated_at.isoformat()
-            }
-            for r in rooms
-        ]
-    }
+    try:
+        rooms = service.get_live_rooms(db, category)
+        
+        return {
+            "items": [
+                {
+                    "id": r.id,
+                    "name": r.name,
+                    "category": r.category,
+                    "keywords": r.keywords,
+                    "ip_character": r.ip_character,
+                    "style": r.style,
+                    "created_at": r.created_at.isoformat(),
+                    "updated_at": r.updated_at.isoformat()
+                }
+                for r in rooms
+            ]
+        }
+    except Exception as e:
+        # 数据库连接失败时返回空列表，避免前端报错
+        # 这在本地开发时很有用，当无法连接到生产数据库时
+        from loguru import logger
+        logger.warning(f"数据库连接失败，返回空列表: {e}")
+        return {
+            "items": []
+        }
 
 
 @router.post("/")

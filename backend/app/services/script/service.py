@@ -388,11 +388,15 @@ class ScriptGeneratorService:
         status: str = "draft"
     ) -> Script:
         """保存脚本到数据库"""
+        # 修复：确保空字符串转换为None，避免外键约束错误
+        if analysis_report_id == '' or not analysis_report_id:
+            analysis_report_id = None
+        
         script = Script(
             id=str(uuid.uuid4()),
             hotspot_id=hotspot_id,
             product_id=product_id,
-            analysis_report_id=analysis_report_id,
+            analysis_report_id=analysis_report_id,  # 现在确保是None而不是空字符串
             video_info=script_data.get("video_info"),
             script_content=script_data.get("script_content"),
             shot_list=script_data.get("shot_list"),

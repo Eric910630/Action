@@ -47,7 +47,7 @@ services:
         condition: service_healthy
     networks:
       - vtics-network
-    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8001"
+    command: sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8001 --workers 2"
 
   # Celery Worker（连接到PolarDB）
   celery-worker:
@@ -73,7 +73,7 @@ services:
       - open-websearch
     networks:
       - vtics-network
-    command: celery -A app.celery_app worker --loglevel=info --pool=solo
+    command: celery -A app.celery_app worker --loglevel=info --pool=prefork --concurrency=2
 
   # Celery Beat（连接到PolarDB）
   celery-beat:

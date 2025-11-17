@@ -38,6 +38,9 @@
               <el-select v-model="filters.platform" placeholder="选择平台" clearable>
                 <el-option label="抖音" value="douyin" />
                 <el-option label="微博" value="weibo" />
+                <el-option label="知乎" value="zhihu" />
+                <el-option label="B站" value="bilibili" />
+                <el-option label="小红书" value="xiaohongshu" />
               </el-select>
             </el-form-item>
             <el-form-item>

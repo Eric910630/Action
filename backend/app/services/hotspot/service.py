@@ -50,8 +50,20 @@ class HotspotMonitorService:
         # 直接爬虫（主要方案）
         if self.use_direct_crawler:
             self.crawler = TrendRadarCrawler()
+            # 小红书专用爬虫（参考BettaFish实现）
+            try:
+                from app.crawlers.xiaohongshu_crawler import XiaohongshuCrawler
+                self.xiaohongshu_crawler = XiaohongshuCrawler()
+                logger.info("小红书专用爬虫已初始化（参考BettaFish实现）")
+            except ImportError:
+                logger.warning("XiaohongshuCrawler未找到，小红书功能可能不可用")
+                self.xiaohongshu_crawler = None
+            except Exception as e:
+                logger.warning(f"小红书爬虫初始化失败: {e}")
+                self.xiaohongshu_crawler = None
         else:
             self.crawler = None
+            self.xiaohongshu_crawler = None
         
         # Firecrawl 客户端（增强功能，可选）
         self.use_firecrawl = getattr(settings, 'FIRECRAWL_ENABLED', False)
@@ -92,7 +104,26 @@ class HotspotMonitorService:
         """
         logger.info(f"开始获取热点，平台: {platform}, 使用直接爬虫: {self.use_direct_crawler}")
         
-        # 方案1：直接爬虫（主要方案）
+        # 特殊处理：小红书平台使用专用爬虫（参考BettaFish实现）
+        if platform.lower() in ["xiaohongshu", "xhs"]:
+            if self.xiaohongshu_crawler:
+                try:
+                    logger.info(f"使用小红书专用爬虫获取热点（参考BettaFish实现）")
+                    hotspots = await self.xiaohongshu_crawler.crawl_hotspots(platform, date)
+                    if hotspots and len(hotspots) > 0:
+                        logger.info(f"小红书爬虫成功获取 {len(hotspots)} 个热点")
+                        return hotspots
+                    else:
+                        logger.warning(f"小红书爬虫返回空结果")
+                        return []
+                except Exception as e:
+                    logger.error(f"小红书爬虫失败: {e}")
+                    return []
+            else:
+                logger.warning(f"小红书爬虫未初始化，无法获取热点")
+                return []
+        
+        # 方案1：直接爬虫（主要方案，用于其他平台）
         if self.use_direct_crawler and self.crawler:
             try:
                 logger.info(f"尝试使用直接爬虫获取 {platform} 的热点")
@@ -188,9 +219,12 @@ class HotspotMonitorService:
                     category_matched = True
                     break
         
-        # 3. 语义相似度（40%权重）- 如果有Agent
+        # 3. 语义相似度（40%权重）- **强制使用Agent进行二次判断**
         semantic_score = 0.0
         semantic_details = {}
+        agent_relevance_score = 0.0  # Agent的最终判断结果
+        agent_judgment_available = False  # 是否有Agent的判断结果
+        
         if self.use_agent and self.relevance_agent:
             try:
                 # 构建直播间文本（包含更丰富的上下文信息）
@@ -207,17 +241,20 @@ class HotspotMonitorService:
                     "hotspot_tags": hotspot.get('tags', []),
                     "product_category": category
                 })
-                semantic_score = result.get("relevance_score", 0.0)
+                agent_relevance_score = result.get("relevance_score", 0.0)
+                agent_judgment_available = True
+                semantic_score = agent_relevance_score
                 semantic_details = {
                     "semantic_score": result.get("semantic_score", 0.0),
                     "sentiment_score": result.get("sentiment_score", 0.0),
                     "keyword_score": result.get("keyword_score", 0.0)
                 }
+                logger.info(f"✅ RelevanceAnalysisAgent判断: {agent_relevance_score:.3f} (阈值: 0.4)")
             except Exception as e:
                 logger.warning(f"语义匹配计算失败: {e}，使用关键词匹配")
         
         # 如果没有语义匹配，使用简单的文本相似度
-        if semantic_score == 0.0:
+        if semantic_score == 0.0 and not agent_judgment_available:
             # 简单的文本相似度：检查标题中是否包含关键词
             if keywords:
                 matched = sum(1 for kw in keywords if kw.lower() in hotspot_text.lower())
@@ -242,40 +279,159 @@ class HotspotMonitorService:
                     ecommerce_score = float(ecommerce_fit.get("score", 0.0))
                     
                     # 检查适用类目是否与直播间类目匹配
-                    # 信任LLM的判断，直接使用ContentAnalysisAgent给出的适用类目
+                    # **重要：使用更严格的类目匹配规则，避免误匹配**
+                    # 例如："家电"不应该匹配"家居家装"，"运动鞋服"不应该匹配"女装"
                     applicable_categories = ecommerce_fit.get("applicable_categories", [])
                     if applicable_categories and category:
                         category_keywords = [cat.strip().lower() for cat in category.split('、')]
                         
-                        # 直接匹配：检查直播间类目关键词是否在适用类目中
-                        # 相信LLM已经做了智能判断，不需要硬编码的映射
-                        matched_categories = [
-                            app_cat for app_cat in applicable_categories
-                            if any(cat_kw in app_cat.lower() or app_cat.lower() in cat_kw 
-                                   for cat_kw in category_keywords)
-                        ]
+                        # **改进：使用更严格的匹配规则**
+                        # 1. 完整词匹配（优先）：类目关键词完全等于适用类目，或适用类目完全包含类目关键词
+                        # 2. 避免部分字符匹配（如"家"匹配"家电"和"家居家装"）
+                        matched_categories = []
+                        for app_cat in applicable_categories:
+                            app_cat_lower = app_cat.lower()
+                            for cat_kw in category_keywords:
+                                # 完整词匹配：类目关键词完全等于适用类目
+                                if cat_kw == app_cat_lower:
+                                    matched_categories.append((app_cat, cat_kw, "exact"))
+                                    break
+                                # 适用类目完全包含类目关键词（如"家居家装"包含"家居"）
+                                elif cat_kw in app_cat_lower and len(cat_kw) >= 2:  # 至少2个字符，避免单字匹配
+                                    # 检查是否是完整词（前后是边界或空格）
+                                    import re
+                                    pattern = r'\b' + re.escape(cat_kw) + r'\b'
+                                    if re.search(pattern, app_cat_lower):
+                                        matched_categories.append((app_cat, cat_kw, "contains"))
+                                        break
+                                # 类目关键词完全包含适用类目（如"家居家装"包含"家居"）
+                                elif app_cat_lower in cat_kw and len(app_cat_lower) >= 2:
+                                    import re
+                                    pattern = r'\b' + re.escape(app_cat_lower) + r'\b'
+                                    if re.search(pattern, cat_kw):
+                                        matched_categories.append((app_cat, cat_kw, "contained"))
+                                        break
                         
                         if matched_categories:
+                            # 直接匹配成功，给满分
                             applicable_categories_match = 1.0
+                            logger.debug(f"✅ 适用类目直接匹配: {matched_categories}")
                         else:
-                            # 如果适用类目与直播间类目完全不匹配，不给分数
-                            # 相信LLM的判断：如果LLM没有将直播间类目列为适用类目，说明不相关
+                            # 直接匹配失败，不给分数
+                            # **不再使用同义词映射或embedding，避免误匹配**
+                            # **依赖RelevanceAnalysisAgent的最终判断**
                             applicable_categories_match = 0.0
+                            logger.debug(f"❌ 适用类目不匹配: {applicable_categories} vs {category_keywords}")
             except Exception as e:
                 logger.warning(f"解析content_analysis失败: {e}")
         
-        # 综合计算匹配度（优化版：加入电商适配性）
-        match_score = (
-            keyword_score * 0.25 +
-            category_score * 0.15 +
-            semantic_score * 0.15 +
-            ecommerce_score * 0.35 +  # 电商适配性权重最高
-            applicable_categories_match * 0.1  # 适用类目匹配
-        )
+        # 综合计算匹配度（优化版：信任LLM的判断）
+        # 新权重分配：
+        # 1. 内容迁移潜力（60%）- LLM的电商适配性判断，这是最智能的部分
+        # 2. 语义关联（25%）- 使用embedding或Agent计算的语义相似度
+        # 3. 直接关联（10%）- 关键词+类目匹配（硬编码，权重降低）
+        # 4. 适用类目匹配（5%）- LLM识别的适用类目与直播间类目的匹配度
         
-        # 如果电商适配性很高（>=70%）且适用类目有匹配，即使关键词/类目不匹配，也给予基础分数
-        # 但如果适用类目完全不匹配，不应该给保底分数
-        if ecommerce_score >= 0.7 and applicable_categories_match > 0 and match_score < 0.3:
+        # 计算内容迁移潜力（基于电商适配性，如果有适用类目匹配则加权）
+        content_migration_potential = ecommerce_score
+        if applicable_categories_match > 0:
+            # 如果适用类目有匹配，说明LLM认为这个热点确实适合这个直播间，加权
+            content_migration_potential = min(1.0, ecommerce_score * 1.1)
+        
+        # 计算语义关联（使用Agent的结果，如果没有则使用关键词匹配作为简单代理）
+        semantic_relevance = semantic_score if semantic_score > 0 else (keyword_score * 0.5 + category_score * 0.5)
+        
+        # 计算直接关联（关键词+类目匹配）
+        direct_relevance = (keyword_score * 0.6 + category_score * 0.4)
+        
+        # **核心逻辑：优先信任RelevanceAnalysisAgent的判断，但增加适用类目匹配的否决权**
+        # 1. 如果Agent判断不相关（relevance_score < 0.4），直接返回0匹配度（提高阈值，更严格）
+        # 2. 如果适用类目完全不匹配（applicable_categories_match = 0），即使Agent判断相关，也应该大幅降低匹配度
+        if agent_judgment_available:
+            if agent_relevance_score < 0.4:  # 提高阈值：从0.3提高到0.4，更严格
+                # Agent明确判断不相关，直接返回0匹配度
+                logger.warning(f"❌ RelevanceAnalysisAgent判断不相关 ({agent_relevance_score:.3f} < 0.4)，返回0匹配度")
+                return {
+                    "match_score": 0.0,
+                    "keyword_score": keyword_score,
+                    "category_score": category_score,
+                    "semantic_score": semantic_score,
+                    "ecommerce_score": ecommerce_score,
+                    "applicable_categories_match": applicable_categories_match,
+                    "details": {
+                        **semantic_details,
+                        "agent_relevance_score": agent_relevance_score,
+                        "agent_judgment": "不相关（< 0.4）"
+                    }
+                }
+            else:
+                # Agent判断相关，但需要检查适用类目匹配
+                # **新增：如果适用类目完全不匹配，即使Agent判断相关，也应该降低匹配度**
+                if applicable_categories_match == 0.0 and not has_direct_match:
+                    # 适用类目完全不匹配 + 无直接关联 = 不应该匹配
+                    logger.warning(f"⚠️ 适用类目完全不匹配且无直接关联，即使Agent判断相关({agent_relevance_score:.3f})，也返回0匹配度")
+                    return {
+                        "match_score": 0.0,
+                        "keyword_score": keyword_score,
+                        "category_score": category_score,
+                        "semantic_score": semantic_score,
+                        "ecommerce_score": ecommerce_score,
+                        "applicable_categories_match": applicable_categories_match,
+                        "details": {
+                            **semantic_details,
+                            "agent_relevance_score": agent_relevance_score,
+                            "agent_judgment": "适用类目不匹配且无直接关联"
+                        }
+                    }
+                else:
+                    # Agent判断相关，使用Agent的relevance_score作为主要依据
+                    logger.info(f"✅ RelevanceAnalysisAgent判断相关 ({agent_relevance_score:.3f} >= 0.4)，使用Agent评分")
+        
+        # 重要：当没有直接关联时（关键词和类目匹配都为0），应该降低内容迁移潜力的权重
+        has_direct_match = keyword_score > 0 or category_score > 0
+        
+        # 综合匹配度计算（优化版：优先信任Agent判断，但提高适用类目匹配的权重）
+        if agent_judgment_available and agent_relevance_score >= 0.4:
+            # 如果有Agent判断且相关，以Agent的relevance_score为主（60%权重，降低）
+            # 提高适用类目匹配的权重（从5%提高到25%），其他因素作为补充（15%权重）
+            match_score = (
+                agent_relevance_score * 0.60 +  # Agent判断（主要依据，降低权重）
+                applicable_categories_match * 0.25 +  # 适用类目匹配（大幅提高权重）
+                content_migration_potential * 0.10 +  # 内容迁移潜力（补充）
+                direct_relevance * 0.05  # 直接关联（补充）
+            )
+            
+            # **新增：如果适用类目完全不匹配，即使Agent判断相关，也应该降低匹配度**
+            if applicable_categories_match == 0.0:
+                # 适用类目不匹配时，匹配度上限为40%
+                match_score = min(match_score, 0.4)
+                logger.warning(f"⚠️ 适用类目不匹配，即使Agent判断相关，匹配度上限为40%")
+        elif has_direct_match:
+            # 有直接关联时，使用正常权重
+            match_score = (
+                content_migration_potential * 0.50 +  # 内容迁移潜力（降低权重）
+                semantic_relevance * 0.25 +            # 语义关联
+                direct_relevance * 0.15 +              # 直接关联（提高权重）
+                applicable_categories_match * 0.10     # 适用类目匹配（提高权重）
+            )
+        else:
+            # 没有直接关联时，大幅降低内容迁移潜力的权重，提高适用类目匹配的权重
+            match_score = (
+                content_migration_potential * 0.30 +  # 内容迁移潜力（大幅降低权重）
+                semantic_relevance * 0.20 +            # 语义关联（降低权重）
+                direct_relevance * 0.15 +              # 直接关联（保持）
+                applicable_categories_match * 0.35     # 适用类目匹配（大幅提高权重，因为这是唯一的关联）
+            )
+        
+        # 重要：当没有直接关联时，即使适用类目有匹配，也应该设置上限
+        # 避免间接关联的热点匹配度过高
+        if not has_direct_match:
+            # 没有直接关联时，匹配度上限为50%
+            match_score = min(match_score, 0.5)
+        
+        # 如果内容迁移潜力很高（>=0.6）且适用类目有匹配，即使直接关联度低，也给予基础分数
+        # 这体现了对LLM判断的信任，但只在有直接关联时生效
+        if has_direct_match and content_migration_potential >= 0.6 and applicable_categories_match > 0 and match_score < 0.3:
             match_score = max(match_score, 0.3)  # 至少30%匹配度
         
         # 详细日志输出

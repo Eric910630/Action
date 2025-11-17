@@ -14,9 +14,13 @@
         <el-descriptions :column="2" border size="small">
           <el-descriptions-item label="标题">{{ hotspot.title }}</el-descriptions-item>
           <el-descriptions-item label="匹配度">
-            <el-tag v-if="hotspot.match_score" :type="getMatchScoreType(hotspot.match_score)">
-              {{ (hotspot.match_score * 100).toFixed(0) }}%
+            <el-tag 
+              v-if="hotspot.match_score !== undefined && hotspot.match_score !== null && hotspot.match_score > 0" 
+              :type="getMatchScoreType(hotspot.match_score)"
+            >
+              {{ (hotspot.match_score * 100).toFixed(1) }}%
             </el-tag>
+            <span v-else style="color: #909399; font-size: 12px;">未计算</span>
           </el-descriptions-item>
           <el-descriptions-item label="热度">{{ hotspot.heat_score || '-' }}</el-descriptions-item>
           <el-descriptions-item label="平台">{{ hotspot.platform }}</el-descriptions-item>

@@ -9,9 +9,9 @@ from app.core.config import settings
 from app.api.v1 import api_router
 
 app = FastAPI(
-    title="VTICS API",
+    title="Action 1.0 API",
     description="短视频热点智能创作系统 API",
-    version="0.1.0",
+    version="1.0.0",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -33,8 +33,8 @@ app.include_router(api_router, prefix="/api/v1")
 async def root():
     """根路径"""
     return JSONResponse({
-        "message": "VTICS API",
-        "version": "0.1.0",
+        "message": "Action 1.0 API",
+        "version": "1.0.0",
         "status": "running"
     })
 
@@ -44,7 +44,7 @@ async def health_check():
     """健康检查"""
     return JSONResponse({
         "status": "healthy",
-        "service": "VTICS API"
+        "service": "Action API"
     })
 
 

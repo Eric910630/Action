@@ -33,7 +33,11 @@ def get_hotspot_info(hotspot_id: str) -> Dict[str, Any]:
             "tags": hotspot.tags or [],
             "heat_score": hotspot.heat_score,
             "heat_growth_rate": hotspot.heat_growth_rate,
-            "match_score": hotspot.match_score
+            "match_score": hotspot.match_score,
+            # 关键：添加ContentAnalysisAgent和RelevanceAnalysisAgent的分析结果
+            "content_analysis": hotspot.content_analysis,  # ContentAnalysisAgent的分析结果（包含电商适配性、适用类目等）
+            "video_structure": hotspot.video_structure,  # 视频结构化信息（包含脚本结构、hook、body、cta等）
+            "content_compact": hotspot.content_compact  # 内容摘要
         }
     except Exception as e:
         logger.error(f"获取热点信息失败: {e}")

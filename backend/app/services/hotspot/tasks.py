@@ -24,7 +24,7 @@ def fetch_daily_hotspots(self, platform: str = None, live_room_id: str = None):
     if platform:
         platforms = [platform]
     else:
-        # 默认抓取多个主流平台
+        # 默认抓取多个主流平台（小红书暂时不启用）
         platforms = ["douyin", "zhihu", "weibo", "bilibili"]
     
     logger.info(f"开始抓取每日热点，平台: {platforms}, 直播间: {live_room_id}")

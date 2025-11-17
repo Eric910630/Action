@@ -4,7 +4,7 @@
     <el-header class="app-header glass-strong">
       <div class="header-content">
         <div class="logo-section">
-          <h1 class="logo">Action</h1>
+          <h1 class="logo">Action 1.0</h1>
           <p class="slogan">抓取全网热点，创意脚本生成</p>
         </div>
         <!-- 导航菜单 -->
@@ -29,6 +29,10 @@
           <el-menu-item index="/scripts">
             <el-icon><Document /></el-icon>
             <span>脚本管理</span>
+          </el-menu-item>
+          <el-menu-item index="/feedback">
+            <el-icon><ChatLineRound /></el-icon>
+            <span>吐槽与期望</span>
           </el-menu-item>
         </el-menu>
         <div class="header-actions">
@@ -56,7 +60,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { Setting, TrendCharts, Goods, VideoPlay, Document } from '@element-plus/icons-vue'
+import { Setting, TrendCharts, Goods, VideoPlay, Document, ChatLineRound } from '@element-plus/icons-vue'
 import LiveRoomSettingsDialog from '@/components/LiveRoomSettingsDialog.vue'
 
 const route = useRoute()

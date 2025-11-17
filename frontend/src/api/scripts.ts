@@ -35,12 +35,13 @@ export interface RegenerateScriptRequest {
 }
 
 export const scriptsApi = {
-  // 获取脚本列表
+  // 获取脚本列表（支持分组）
   getScripts(params?: {
     product_id?: string
     status?: string
     limit?: number
     offset?: number
+    group_by_product?: boolean  // 是否按商品-热点分组
   }) {
     return apiClient.get<ScriptListResponse>('/scripts', { params })
   },
@@ -60,9 +61,11 @@ export const scriptsApi = {
     return apiClient.put(`/scripts/${id}`, data)
   },
 
-  // 审核脚本
-  reviewScript(id: string, action: 'approve' | 'reject', comment?: string) {
-    return apiClient.post(`/scripts/${id}/review`, { action, comment })
+  // 导出PDF
+  exportPDF(id: string) {
+    return apiClient.get(`/scripts/${id}/export-pdf`, {
+      responseType: 'blob'
+    })
   },
 
   // 获取优化建议

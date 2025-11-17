@@ -114,6 +114,7 @@
             <el-option label="微博" value="weibo" />
             <el-option label="知乎" value="zhihu" />
             <el-option label="B站" value="bilibili" />
+            <el-option label="小红书" value="xiaohongshu" />
           </el-select>
         </el-form-item>
         <el-form-item label="开始时间">
@@ -397,19 +398,52 @@ const selectedHotspotDetail = ref<any>(null)
 
 const loadLiveRooms = async () => {
   try {
+    console.log('开始加载直播间...')
     const response = await liveRoomsApi.getLiveRooms()
+    console.log('直播间API响应:', response)
+    
+    // 检查响应格式
+    if (!response) {
+      console.error('API响应为空')
+      ElMessage.error('加载直播间失败: API响应为空')
+      return
+    }
+    
+    // 检查是否有 items 字段
+    if (!response.items) {
+      console.error('API响应格式错误，缺少 items 字段:', response)
+      ElMessage.error('加载直播间失败: 响应格式错误')
+      return
+    }
+    
     // 过滤掉测试直播间（双重保护，即使数据库中有也过滤掉）
-    liveRooms.value = response.items.filter(room => 
+    const allRooms = response.items || []
+    liveRooms.value = allRooms.filter(room => 
       !room.name.includes('测试') && !room.name.toLowerCase().includes('test')
     )
     
+    console.log(`加载到 ${allRooms.length} 个直播间，过滤后 ${liveRooms.value.length} 个`)
+    
     // 默认选择第一个直播间
     if (liveRooms.value.length > 0 && !activeLiveRoomId.value) {
-      activeLiveRoomId.value = liveRooms.value[0].id
+      const firstRoomId = liveRooms.value[0].id
+      activeLiveRoomId.value = firstRoomId
+      console.log('默认选择直播间:', liveRooms.value[0].name, 'ID:', firstRoomId)
+      // 立即加载第一个直播间的数据
+      loadVisualizationData(firstRoomId)
+    } else if (liveRooms.value.length === 0) {
+      console.warn('没有可用的直播间')
+      ElMessage.warning('暂无直播间，请先创建直播间')
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('加载直播间失败:', error)
-    ElMessage.error('加载直播间失败')
+    console.error('错误详情:', {
+      message: error.message,
+      response: error.response,
+      status: error.response?.status,
+      data: error.response?.data
+    })
+    ElMessage.error('加载直播间失败: ' + (error.message || '未知错误'))
   }
 }
 
@@ -418,7 +452,14 @@ const loadVisualizationData = async (liveRoomId?: string) => {
     // 先清空数据，避免显示上一个直播间的数据
     visualizationData.value = null
     
+    // 确保传递正确的 live_room_id 参数
+    // 如果 liveRoomId 为空或 undefined，不传递参数（获取所有直播间数据）
+    // 否则传递具体的 live_room_id
+    const params = liveRoomId ? { live_room_id: liveRoomId } : undefined
+    console.log('加载可视化数据，live_room_id:', liveRoomId, 'params:', params)
+    
     const data = await hotspotsApi.getVisualization(liveRoomId)
+    console.log('可视化数据加载完成，返回数据:', data)
     visualizationData.value = data
     
     // 如果没有数据，设置为空结构，避免卡在上一个直播间的数据
@@ -426,6 +467,9 @@ const loadVisualizationData = async (liveRoomId?: string) => {
       visualizationData.value = {
         categories: []
       }
+      console.log('可视化数据为空，已设置为空结构')
+    } else {
+      console.log(`可视化数据加载成功，共 ${data.categories.length} 个类目`)
     }
   } catch (error) {
     console.error('加载可视化数据失败:', error)
@@ -439,7 +483,12 @@ const loadVisualizationData = async (liveRoomId?: string) => {
 
 const handleLiveRoomChange = (liveRoomId: string) => {
   // 切换直播间时重新加载数据
-  loadVisualizationData(liveRoomId)
+  console.log('直播间切换:', liveRoomId)
+  if (liveRoomId) {
+    loadVisualizationData(liveRoomId)
+  } else {
+    console.warn('直播间ID为空，无法加载数据')
+  }
 }
 
 const handleFetchHotspots = async () => {
@@ -624,6 +673,14 @@ const handleBubbleClick = async (hotspot: any) => {
   // 点击气泡时，打开商品选择对话框
   try {
     const detail = await hotspotsApi.getHotspotDetail(hotspot.id)
+    // 重要：从气泡数据中获取匹配度（这是针对当前直播间的实时匹配度）
+    // 如果气泡数据中有match_score，使用它；否则使用详情中的match_score
+    if (hotspot.match_score !== undefined && hotspot.match_score !== null) {
+      detail.match_score = hotspot.match_score
+      console.log('使用气泡数据中的匹配度:', hotspot.match_score)
+    } else {
+      console.log('气泡数据中没有匹配度，使用详情中的匹配度:', detail.match_score)
+    }
     selectedHotspot.value = detail
     productDialogVisible.value = true
   } catch (error: any) {
@@ -631,12 +688,15 @@ const handleBubbleClick = async (hotspot: any) => {
   }
 }
 
-const handleScriptGenerated = (scriptId: string) => {
-  ElMessage.success('脚本生成成功')
+const handleScriptGenerated = (taskId: string) => {
+  ElMessage.success('脚本生成任务已启动')
   productDialogVisible.value = false
   
-  // 跳转到脚本管理页面
-  router.push('/scripts')
+  // 跳转到脚本管理页面，并传递task_id
+  router.push({
+    path: '/scripts',
+    query: { task_id: taskId }
+  })
 }
 
 // 查看已有热点
@@ -704,7 +764,9 @@ const getPlatformName = (platform: string) => {
     'douyin': '抖音',
     'weibo': '微博',
     'zhihu': '知乎',
-    'bilibili': 'B站'
+    'bilibili': 'B站',
+    'xiaohongshu': '小红书',
+    'xhs': '小红书'  // 别名
   }
   return platformMap[platform] || platform
 }
@@ -714,7 +776,9 @@ const getPlatformTagType = (platform: string) => {
     'douyin': 'danger',
     'weibo': 'warning',
     'zhihu': 'success',
-    'bilibili': 'info'
+    'bilibili': 'info',
+    'xiaohongshu': 'danger',  // 小红书使用红色（品牌色）
+    'xhs': 'danger'  // 别名
   }
   return typeMap[platform] || ''
 }
@@ -741,11 +805,13 @@ watch(liveRooms, (newRooms) => {
 })
 
 // 监听选中的直播间，加载对应数据
-watch(activeLiveRoomId, (newId) => {
-  if (newId) {
+watch(activeLiveRoomId, (newId, oldId) => {
+  console.log('activeLiveRoomId 变化:', { oldId, newId })
+  if (newId && newId !== oldId) {
+    // 只有当ID真正变化时才加载数据，避免重复加载
     loadVisualizationData(newId)
   }
-})
+}, { immediate: false })  // 不立即执行，避免初始化时重复加载
 
 onMounted(() => {
   loadLiveRooms()

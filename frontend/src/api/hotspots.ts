@@ -38,7 +38,7 @@ export const hotspotsApi = {
   },
 
   // 触发热点抓取
-  // 如果不传platform参数，后端会抓取多个平台（douyin, zhihu, weibo, bilibili）
+  // 如果不传platform参数，后端会抓取多个平台（douyin, zhihu, weibo, bilibili, xiaohongshu）
   fetchHotspots(platform?: string) {
     const params: any = {}
     if (platform) {
@@ -59,9 +59,13 @@ export const hotspotsApi = {
 
   // 获取可视化数据（气泡图）
   getVisualization(live_room_id?: string) {
-    return apiClient.get('/hotspots/visualization', {
-      params: { live_room_id }
-    })
+    // 确保参数正确传递：如果 live_room_id 存在，则传递；否则不传递参数（获取所有数据）
+    const params: any = {}
+    if (live_room_id) {
+      params.live_room_id = live_room_id
+    }
+    console.log('API调用 getVisualization，params:', params)
+    return apiClient.get('/hotspots/visualization', { params })
   }
 }
 

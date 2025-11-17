@@ -2,6 +2,7 @@
 Celery应用配置
 """
 from celery import Celery
+from celery.schedules import crontab
 from app.core.config import settings
 
 celery_app = Celery(
@@ -12,6 +13,7 @@ celery_app = Celery(
         "app.services.hotspot.tasks",
         "app.services.analysis.tasks",
         "app.services.script.tasks",
+        "app.services.data.tasks",
     ]
 )
 
@@ -43,15 +45,15 @@ celery_app.conf.update(
 celery_app.conf.beat_schedule = {
     "fetch-daily-hotspots": {
         "task": "app.services.hotspot.tasks.fetch_daily_hotspots",
-        "schedule": {"hour": 8, "minute": 0},  # 每日8:00
+        "schedule": crontab(hour=8, minute=0),  # 每日8:00
     },
     "push-hotspots-to-feishu": {
         "task": "app.services.hotspot.tasks.push_hotspots_to_feishu",
-        "schedule": {"hour": 9, "minute": 0},  # 每日9:00
+        "schedule": crontab(hour=9, minute=0),  # 每日9:00
     },
     "cleanup-old-data": {
         "task": "app.services.data.tasks.cleanup_old_data",
-        "schedule": {"hour": 2, "minute": 0},  # 每日2:00
+        "schedule": crontab(hour=2, minute=0),  # 每日2:00
     },
 }
 

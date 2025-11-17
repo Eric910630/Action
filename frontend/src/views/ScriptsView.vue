@@ -12,48 +12,79 @@
       </el-button>
     </div>
     
-    <!-- 脚本生成进度提示 -->
-    <div v-if="generatingScript || currentScriptTaskId" class="script-generating-card design-card glass-strong" style="margin-bottom: 20px;">
-      <div class="task-progress-content">
-        <div class="task-status-header">
-          <div class="task-status-left">
-            <div class="task-status-icon-wrapper">
-              <el-icon v-if="generatingScript || scriptTaskStatus?.state === 'PROGRESS' || scriptTaskStatus?.state === 'PENDING'" class="spinning-icon">
-                <Loading />
-              </el-icon>
-              <el-icon v-else-if="scriptTaskStatus?.state === 'SUCCESS'" class="success-icon">
-                <CircleCheck />
-              </el-icon>
-              <el-icon v-else-if="scriptTaskStatus?.state === 'FAILURE'" class="error-icon">
-                <CircleClose />
-              </el-icon>
+    <!-- 脚本生成进度提示（优化版） -->
+    <transition name="fade">
+      <div v-if="generatingScript || currentScriptTaskId" class="script-generating-card">
+        <div class="task-progress-container">
+          <!-- 左侧图标和状态 -->
+          <div class="task-status-section">
+            <div class="task-icon-wrapper">
+              <div 
+                v-if="generatingScript || scriptTaskStatus?.state === 'PROGRESS' || scriptTaskStatus?.state === 'PENDING'"
+                class="loading-spinner"
+              >
+                <div class="spinner-ring"></div>
+                <div class="spinner-ring"></div>
+                <div class="spinner-ring"></div>
+              </div>
+              <div v-else-if="scriptTaskStatus?.state === 'SUCCESS'" class="success-icon-circle">
+                <el-icon><CircleCheck /></el-icon>
+              </div>
+              <div v-else-if="scriptTaskStatus?.state === 'FAILURE'" class="error-icon-circle">
+                <el-icon><CircleClose /></el-icon>
+              </div>
             </div>
-            <span class="task-status-text">{{ scriptTaskStatusText }}</span>
+            <div class="task-info">
+              <div class="task-title">{{ scriptTaskStatusText || '脚本生成中...' }}</div>
+              <div v-if="scriptTaskStatus?.status" class="task-subtitle">{{ scriptTaskStatus.status }}</div>
+              <div v-if="scriptTaskStatus?.current && scriptTaskStatus?.total" class="task-progress-text">
+                进度：{{ scriptTaskStatus.current }} / {{ scriptTaskStatus.total }}
+              </div>
+            </div>
+          </div>
+          
+          <!-- 右侧进度条（10等分显示） -->
+          <div class="task-progress-section">
+            <div class="segmented-progress-bar" v-if="scriptTaskStatus?.total">
+              <div 
+                v-for="n in scriptTaskStatus.total" 
+                :key="n"
+                class="progress-segment"
+                :class="{
+                  'segment-completed': scriptTaskStatus?.current >= n,
+                  'segment-active': scriptTaskStatus?.current === n - 1 && scriptTaskStatus?.state === 'PROGRESS',
+                  'segment-pending': scriptTaskStatus?.current < n - 1
+                }"
+              >
+                <div class="segment-fill"></div>
+                <div class="segment-number">{{ n }}</div>
+              </div>
+            </div>
+            <!-- 兼容旧版进度条（如果没有total信息） -->
+            <div v-else class="modern-progress-bar">
+              <div 
+                class="progress-fill"
+                :class="{
+                  'progress-indeterminate': generatingScript && (!scriptTaskStatus || scriptTaskStatus.state === 'PENDING'),
+                  'progress-success': scriptTaskStatus?.state === 'SUCCESS',
+                  'progress-error': scriptTaskStatus?.state === 'FAILURE'
+                }"
+                :style="{
+                  width: scriptTaskStatus?.current && scriptTaskStatus?.total 
+                    ? `${Math.round((scriptTaskStatus.current / scriptTaskStatus.total) * 100)}%` 
+                    : generatingScript && (!scriptTaskStatus || scriptTaskStatus.state === 'PENDING') ? '100%' : '0%'
+                }"
+              >
+                <div class="progress-shine"></div>
+              </div>
+            </div>
+            <div v-if="scriptTaskStatus?.current && scriptTaskStatus?.total" class="progress-percentage">
+              {{ scriptTaskStatus.current }} / {{ scriptTaskStatus.total }}
+            </div>
           </div>
         </div>
-        
-        <!-- 自定义进度条 -->
-        <div class="custom-progress-wrapper">
-          <div class="custom-progress-track">
-            <div 
-              class="custom-progress-bar"
-              :class="{
-                'progress-indeterminate': generatingScript && (!scriptTaskStatus || scriptTaskStatus.state === 'PENDING'),
-                'progress-success': scriptTaskStatus?.state === 'SUCCESS',
-                'progress-error': scriptTaskStatus?.state === 'FAILURE'
-              }"
-              :style="{
-                width: scriptTaskStatus?.current && scriptTaskStatus?.total 
-                  ? `${Math.round((scriptTaskStatus.current / scriptTaskStatus.total) * 100)}%` 
-                  : '100%'
-              }"
-            ></div>
-          </div>
-        </div>
-        
-        <div v-if="scriptTaskStatus?.status" class="task-detail">{{ scriptTaskStatus.status }}</div>
       </div>
-    </div>
+    </transition>
 
     <el-card class="scripts-list design-card">
       <template #header>
@@ -77,8 +108,6 @@
         <el-form-item label="状态">
           <el-select v-model="filters.status" placeholder="选择状态" clearable>
             <el-option label="草稿" value="draft" />
-            <el-option label="已审核" value="approved" />
-            <el-option label="已拒绝" value="rejected" />
           </el-select>
         </el-form-item>
         <el-form-item>
@@ -87,8 +116,77 @@
         </el-form-item>
       </el-form>
 
-      <!-- 脚本列表 -->
-      <el-table :data="scripts" v-loading="loading" stripe>
+      <!-- 脚本列表（层级展示：商品-热点-脚本） -->
+      <div v-if="isGroupedView" v-loading="loading" class="grouped-scripts-container">
+        <el-collapse v-model="activeProducts" v-for="product in groupedScripts" :key="product.product_id">
+          <el-collapse-item :name="product.product_id">
+            <template #title>
+              <div class="product-header">
+                <el-icon><Goods /></el-icon>
+                <span class="product-name">{{ product.product_name }}</span>
+                <el-tag size="small" type="info" style="margin-left: 8px;">{{ product.product_category }}</el-tag>
+                <span class="script-count">共 {{ getTotalScriptsCount(product) }} 个脚本</span>
+              </div>
+            </template>
+            
+            <!-- 热点列表 -->
+            <el-collapse v-model="activeHotspots[product.product_id]" v-for="hotspot in product.hotspots" :key="hotspot.hotspot_id">
+              <el-collapse-item :name="hotspot.hotspot_id">
+                <template #title>
+                  <div class="hotspot-header">
+                    <el-icon><Promotion /></el-icon>
+                    <span class="hotspot-title">{{ hotspot.hotspot_title }}</span>
+                    <el-tag size="small" :type="getPlatformTagType(hotspot.hotspot_platform)" style="margin-left: 8px;">
+                      {{ getPlatformName(hotspot.hotspot_platform) }}
+                    </el-tag>
+                    <span class="script-count">{{ hotspot.scripts.length }} 个脚本版本</span>
+                  </div>
+                </template>
+                
+                <!-- 脚本列表（多个版本） -->
+                <div class="scripts-list">
+                  <el-card
+                    v-for="(script, index) in hotspot.scripts"
+                    :key="script.id"
+                    class="script-card"
+                    shadow="hover"
+                    :body-style="{ padding: '16px' }"
+                  >
+                    <div class="script-card-header">
+                      <div class="script-info">
+                        <span class="script-version">版本 {{ index + 1 }}</span>
+                        <span class="script-title">{{ script.video_info?.title || '未命名脚本' }}</span>
+                        <el-tag :type="getStatusType(script.status)" size="small">
+                          {{ getStatusText(script.status) }}
+                        </el-tag>
+                      </div>
+                      <div class="script-actions">
+                        <el-button link type="primary" size="small" @click="viewDetail(script)">详情</el-button>
+                        <el-button link type="primary" size="small" @click="handleOptimize(script)">优化</el-button>
+                        <el-button link type="warning" size="small" @click="handleRegenerate(script)">重新生成</el-button>
+                        <el-button
+                          link
+                          type="primary"
+                          size="small"
+                          @click="handleExportPDF(script)"
+                        >
+                          导出PDF
+                        </el-button>
+                      </div>
+                    </div>
+                    <div class="script-meta">
+                      <span class="script-time">创建时间：{{ formatTime(script.created_at) }}</span>
+                    </div>
+                  </el-card>
+                </div>
+              </el-collapse-item>
+            </el-collapse>
+          </el-collapse-item>
+        </el-collapse>
+      </div>
+      
+      <!-- 兼容旧格式：平铺列表 -->
+      <el-table v-else :data="flatScripts" v-loading="loading" stripe>
         <el-table-column prop="video_info.title" label="视频标题" min-width="150">
           <template #default="{ row }">
             {{ row.video_info?.title || '-' }}
@@ -108,20 +206,11 @@
             <el-button link type="primary" @click="handleOptimize(row)">优化</el-button>
             <el-button link type="warning" @click="handleRegenerate(row)">重新生成</el-button>
             <el-button
-              v-if="row.status === 'draft'"
               link
-              type="success"
-              @click="handleReview(row, 'approve')"
+              type="primary"
+              @click="handleExportPDF(row)"
             >
-              通过
-            </el-button>
-            <el-button
-              v-if="row.status === 'draft'"
-              link
-              type="danger"
-              @click="handleReview(row, 'reject')"
-            >
-              拒绝
+              导出PDF
             </el-button>
           </template>
         </el-table-column>
@@ -177,7 +266,7 @@
           <el-input-number v-model="generateForm.duration" :min="5" :max="15" />
         </el-form-item>
         <el-form-item label="生成数量" required>
-          <el-input-number v-model="generateForm.script_count" :min="1" :max="10" />
+          <el-input-number v-model="generateForm.script_count" :min="5" :max="10" />
           <span style="margin-left: 10px; color: #909399; font-size: 12px;">
             将生成 {{ generateForm.script_count }} 个不同版本的脚本
           </span>
@@ -607,9 +696,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Loading, Check, CircleCheck, CircleClose } from '@element-plus/icons-vue'
+import { Loading, Check, CircleCheck, CircleClose, Goods, Promotion } from '@element-plus/icons-vue'
 import { scriptsApi, type Script, type GenerateScriptRequest } from '@/api/scripts'
 import { hotspotsApi, type Hotspot } from '@/api/hotspots'
 import { productsApi, type Product } from '@/api/products'
@@ -618,6 +707,11 @@ import { tasksApi, type TaskStatus } from '@/api/tasks'
 
 const loading = ref(false)
 const scripts = ref<Script[]>([])
+const groupedScripts = ref<any[]>([]) // 分组后的脚本数据
+const flatScripts = ref<Script[]>([]) // 平铺的脚本数据（兼容旧格式）
+const isGroupedView = ref(false) // 是否为分组视图
+const activeProducts = ref<string[]>([]) // 展开的商品ID列表
+const activeHotspots = ref<Record<string, string[]>>({}) // 展开的热点ID列表（按商品分组）
 const hotspots = ref<Hotspot[]>([])
 const products = ref<Product[]>([])
 const reports = ref<AnalysisReport[]>([])
@@ -672,9 +766,38 @@ const loadScripts = async () => {
       product_id: filters.value.product_id || undefined,
       status: filters.value.status || undefined,
       limit: pagination.value.pageSize,
-      offset: (pagination.value.page - 1) * pagination.value.pageSize
+      offset: (pagination.value.page - 1) * pagination.value.pageSize,
+      group_by_product: true  // 启用分组
     })
-    scripts.value = response.items
+    
+    // 判断返回的是分组数据还是平铺数据
+    if (response.grouped && Array.isArray(response.items) && response.items.length > 0 && response.items[0].product_id) {
+      // 分组数据
+      isGroupedView.value = true
+      groupedScripts.value = response.items
+      
+      // 默认展开所有商品和热点
+      activeProducts.value = response.items.map((p: any) => p.product_id)
+      response.items.forEach((product: any) => {
+        activeHotspots.value[product.product_id] = product.hotspots.map((h: any) => h.hotspot_id)
+      })
+      
+      // 同时保存平铺数据（用于兼容）
+      flatScripts.value = []
+      response.items.forEach((product: any) => {
+        product.hotspots.forEach((hotspot: any) => {
+          hotspot.scripts.forEach((script: any) => {
+            flatScripts.value.push(script)
+          })
+        })
+      })
+    } else {
+      // 平铺数据（兼容旧格式）
+      isGroupedView.value = false
+      flatScripts.value = response.items
+      scripts.value = response.items
+    }
+    
     pagination.value.total = response.total
   } catch (error: any) {
     ElMessage.error('加载脚本失败: ' + (error.message || '未知错误'))
@@ -777,9 +900,25 @@ const startScriptTaskPolling = () => {
         generatingScript.value = false
         currentScriptTaskId.value = null
         scriptTaskStatus.value = null
+      } else if (status.state === 'PENDING') {
+        // PENDING状态：任务在队列中等待，继续轮询
+        // 但不要显示"任务等待中..."，而是显示"任务排队中..."
+        scriptTaskStatus.value = {
+          ...status,
+          status: '任务排队中...'
+        }
       }
-    } catch (error) {
+      // PROGRESS状态：任务正在执行，继续轮询（已经有进度信息）
+    } catch (error: any) {
       console.error('获取脚本生成任务状态失败:', error)
+      // 如果任务不存在或已过期，停止轮询
+      if (error.response?.status === 404 || error.message?.includes('not found')) {
+        console.warn('任务不存在或已过期，停止轮询')
+        stopScriptTaskPolling()
+        generatingScript.value = false
+        currentScriptTaskId.value = null
+        scriptTaskStatus.value = null
+      }
     }
   }, 2000) // 每2秒轮询一次
 }
@@ -1190,13 +1329,26 @@ const submitRegenerate = async () => {
   }
 }
 
-const handleReview = async (script: Script, action: 'approve' | 'reject') => {
+const handleExportPDF = async (script: Script) => {
   try {
-    await scriptsApi.reviewScript(script.id, action)
-    ElMessage.success(action === 'approve' ? '审核通过' : '审核拒绝')
-    loadScripts()
+    ElMessage.info('正在生成PDF，请稍候...')
+    const response = await scriptsApi.exportPDF(script.id)
+    
+    // 创建下载链接
+    const blob = new Blob([response], { type: 'application/pdf' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    const title = script.video_info?.title || script.id
+    link.download = `脚本_${title}.pdf`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    window.URL.revokeObjectURL(url)
+    
+    ElMessage.success('PDF导出成功')
   } catch (error: any) {
-    ElMessage.error('审核失败: ' + (error.message || '未知错误'))
+    ElMessage.error('PDF导出失败: ' + (error.response?.data?.detail || error.message))
   }
 }
 
@@ -1207,16 +1359,12 @@ const resetFilters = () => {
 
 const getStatusType = (status?: string) => {
   switch (status) {
-    case 'approved': return 'success'
-    case 'rejected': return 'danger'
     default: return 'info'
   }
 }
 
 const getStatusText = (status?: string) => {
   switch (status) {
-    case 'approved': return '已审核'
-    case 'rejected': return '已拒绝'
     default: return '草稿'
   }
 }
@@ -1228,6 +1376,50 @@ const getSuggestionType = (level?: string) => {
     case 'info': 
     default: return 'info'
   }
+}
+
+// 获取平台名称
+const getPlatformName = (platform?: string) => {
+  const platformMap: Record<string, string> = {
+    'douyin': '抖音',
+    'weibo': '微博',
+    'zhihu': '知乎',
+    'bilibili': 'B站',
+    'xiaohongshu': '小红书',
+    'xhs': '小红书'
+  }
+  return platformMap[platform || ''] || platform || '未知'
+}
+
+// 获取平台标签类型
+const getPlatformTagType = (platform?: string) => {
+  const typeMap: Record<string, string> = {
+    'douyin': 'danger',
+    'weibo': 'warning',
+    'zhihu': 'success',
+    'bilibili': 'info',
+    'xiaohongshu': 'danger',
+    'xhs': 'danger'
+  }
+  return typeMap[platform || ''] || ''
+}
+
+// 计算商品下的脚本总数
+const getTotalScriptsCount = (product: any) => {
+  return product.hotspots.reduce((total: number, hotspot: any) => total + hotspot.scripts.length, 0)
+}
+
+// 格式化时间
+const formatTime = (timeStr: string) => {
+  if (!timeStr) return '-'
+  const date = new Date(timeStr)
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
 }
 
 // 脚本生成任务状态文本
@@ -1259,6 +1451,17 @@ const scriptTaskStatusText = computed(() => {
 })
 
 onMounted(() => {
+  // 检查URL参数中是否有task_id（从其他页面跳转过来时）
+  const route = useRoute()
+  const taskIdFromQuery = route.query.task_id as string | undefined
+  if (taskIdFromQuery) {
+    currentScriptTaskId.value = taskIdFromQuery
+    generatingScript.value = true
+    startScriptTaskPolling()
+    // 清除URL参数，避免刷新时重复
+    router.replace({ path: '/scripts', query: {} })
+  }
+  
   loadHotspots()
   loadProducts()
   loadReports()
@@ -1297,16 +1500,20 @@ onBeforeUnmount(() => {
 
 .scripts-list {
   flex: 1;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   display: flex;
   flex-direction: column;
+  min-height: 0; /* 允许flex子元素缩小 */
 }
 
 .scripts-list :deep(.el-card__body) {
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  min-height: 0; /* 允许flex子元素缩小 */
 }
 
 .card-header {
@@ -1495,6 +1702,421 @@ onBeforeUnmount(() => {
 .no-suggestions {
   padding: 40px 0;
   text-align: center;
+}
+
+/* 分组脚本容器样式 */
+.grouped-scripts-container {
+  max-height: calc(100vh - 300px); /* 确保有足够空间显示 */
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 10px 0;
+}
+
+.product-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.product-name {
+  font-size: 16px;
+  color: #303133;
+}
+
+.hotspot-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.hotspot-title {
+  font-size: 14px;
+  color: #606266;
+}
+
+.script-count {
+  margin-left: auto;
+  font-size: 12px;
+  color: #909399;
+}
+
+.scripts-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px 0;
+}
+
+.script-card {
+  margin-bottom: 0;
+}
+
+.script-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.script-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.script-version {
+  font-size: 12px;
+  color: #909399;
+  background: #f5f7fa;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.script-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #303133;
+}
+
+.script-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.script-meta {
+  font-size: 12px;
+  color: #909399;
+}
+
+.script-time {
+  margin-right: 12px;
+}
+
+/* 脚本生成进度卡片样式（优化版） */
+.script-generating-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 16px;
+  padding: 24px 32px;
+  margin-bottom: 24px;
+  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.25);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.fade-enter-active, .fade-leave-active {
+  transition: opacity 0.3s ease;
+}
+
+.fade-enter-from, .fade-leave-to {
+  opacity: 0;
+}
+
+.task-progress-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.task-status-section {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+}
+
+.task-icon-wrapper {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+}
+
+/* 加载动画 */
+.loading-spinner {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.spinner-ring {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border: 3px solid transparent;
+  border-top-color: rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  animation: spin 1.2s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+}
+
+.spinner-ring:nth-child(1) {
+  animation-delay: -0.45s;
+}
+
+.spinner-ring:nth-child(2) {
+  animation-delay: -0.3s;
+  border-top-color: rgba(255, 255, 255, 0.7);
+}
+
+.spinner-ring:nth-child(3) {
+  animation-delay: -0.15s;
+  border-top-color: rgba(255, 255, 255, 0.5);
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.success-icon-circle {
+  width: 100%;
+  height: 100%;
+  background: rgba(16, 185, 129, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgba(16, 185, 129, 0.5);
+}
+
+.success-icon-circle .el-icon {
+  font-size: 28px;
+  color: #10b981;
+}
+
+.error-icon-circle {
+  width: 100%;
+  height: 100%;
+  background: rgba(239, 68, 68, 0.2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid rgba(239, 68, 68, 0.5);
+}
+
+.error-icon-circle .el-icon {
+  font-size: 28px;
+  color: #ef4444;
+}
+
+.task-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.task-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 6px;
+  line-height: 1.4;
+}
+
+.task-subtitle {
+  font-size: 14px;
+  color: rgba(255, 255, 255, 0.85);
+  margin-bottom: 4px;
+  line-height: 1.4;
+}
+
+.task-progress-text {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 500;
+}
+
+.task-progress-section {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 200px;
+}
+
+.modern-progress-bar {
+  flex: 1;
+  height: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 10px;
+  overflow: hidden;
+  position: relative;
+  backdrop-filter: blur(10px);
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #ffffff 0%, rgba(255, 255, 255, 0.8) 100%);
+  border-radius: 10px;
+  position: relative;
+  transition: width 0.3s ease;
+  overflow: hidden;
+}
+
+.progress-fill.progress-indeterminate {
+  background: linear-gradient(90deg, 
+    rgba(255, 255, 255, 0.8) 0%, 
+    rgba(255, 255, 255, 1) 50%, 
+    rgba(255, 255, 255, 0.8) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+.progress-fill.progress-success {
+  background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+}
+
+.progress-fill.progress-error {
+  background: linear-gradient(90deg, #ef4444 0%, #dc2626 100%);
+}
+
+.progress-shine {
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    transparent 0%, 
+    rgba(255, 255, 255, 0.4) 50%, 
+    transparent 100%);
+  animation: shine 2s infinite;
+}
+
+@keyframes shine {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+.progress-percentage {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  min-width: 50px;
+  text-align: right;
+}
+
+/* 分段进度条样式（10等分） */
+.segmented-progress-bar {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  height: 32px;
+  align-items: center;
+}
+
+.progress-segment {
+  flex: 1;
+  height: 100%;
+  position: relative;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+
+.progress-segment.segment-completed {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%);
+  border-color: rgba(255, 255, 255, 0.5);
+  box-shadow: 0 2px 8px rgba(255, 255, 255, 0.3);
+}
+
+.progress-segment.segment-active {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.6) 0%, rgba(255, 255, 255, 0.4) 100%);
+  border-color: rgba(255, 255, 255, 0.8);
+  animation: pulse 1.5s ease-in-out infinite;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.5);
+}
+
+.progress-segment.segment-pending {
+  background: rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scale(1.02);
+  }
+}
+
+.segment-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, 
+    rgba(255, 255, 255, 0.9) 0%, 
+    rgba(255, 255, 255, 1) 50%, 
+    rgba(255, 255, 255, 0.9) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.progress-segment.segment-active .segment-fill {
+  opacity: 1;
+}
+
+.segment-number {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  z-index: 1;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.progress-segment.segment-completed .segment-number {
+  color: rgba(102, 126, 234, 0.9);
+  text-shadow: 0 1px 2px rgba(255, 255, 255, 0.3);
+}
+
+.progress-segment.segment-pending .segment-number {
+  color: rgba(255, 255, 255, 0.5);
 }
 
 /* 编辑工具栏 */

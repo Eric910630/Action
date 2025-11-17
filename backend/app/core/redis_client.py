@@ -12,5 +12,7 @@ redis_client = redis.Redis(
     decode_responses=True,
     socket_connect_timeout=5,
     socket_timeout=5,
+    # 生产环境优化：增加连接池大小以支持更多并发
+    max_connections=50,  # 连接池大小：从默认增加到50
 )
 

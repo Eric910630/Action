@@ -13,7 +13,7 @@ export default defineConfig({
     port: 3001,
     proxy: {
       '/api': {
-        target: 'http://localhost:8001',
+        target: 'http://localhost:8000',  // 修复：后端运行在8000端口，不是8001
         changeOrigin: true,
       },
     },

@@ -41,11 +41,15 @@ let chartInstance: echarts.ECharts | null = null
 // 使用潘通经典蓝色系（Pantone Classic Blue 19-4052），不同平台用不同透明度
 // 基础色：RGB(15, 76, 129) = #0F4C81
 const pantoneBaseColor = { r: 15, g: 76, b: 129 }  // Pantone Classic Blue 19-4052
+// 小红书品牌色：红色系 RGB(255, 51, 51) = #FF3333
+const xiaohongshuColor = { r: 255, g: 51, b: 51 }  // 小红书红色
 const platformColors: Record<string, string> = {
   'douyin': `rgba(${pantoneBaseColor.r}, ${pantoneBaseColor.g}, ${pantoneBaseColor.b}, 0.9)`,      // 抖音 - 90%透明度
   'zhihu': `rgba(${pantoneBaseColor.r}, ${pantoneBaseColor.g}, ${pantoneBaseColor.b}, 0.75)`,      // 知乎 - 75%透明度
   'weibo': `rgba(${pantoneBaseColor.r}, ${pantoneBaseColor.g}, ${pantoneBaseColor.b}, 0.6)`,       // 微博 - 60%透明度
   'bilibili': `rgba(${pantoneBaseColor.r}, ${pantoneBaseColor.g}, ${pantoneBaseColor.b}, 0.45)`,  // B站 - 45%透明度
+  'xiaohongshu': `rgba(${xiaohongshuColor.r}, ${xiaohongshuColor.g}, ${xiaohongshuColor.b}, 0.8)`, // 小红书 - 80%透明度（红色）
+  'xhs': `rgba(${xiaohongshuColor.r}, ${xiaohongshuColor.g}, ${xiaohongshuColor.b}, 0.8)`,         // 小红书别名
   'toutiao': `rgba(${pantoneBaseColor.r}, ${pantoneBaseColor.g}, ${pantoneBaseColor.b}, 0.3)`,     // 头条 - 30%透明度
   'baidu': `rgba(${pantoneBaseColor.r}, ${pantoneBaseColor.g}, ${pantoneBaseColor.b}, 0.2)`,      // 百度 - 20%透明度
   'default': `rgba(${pantoneBaseColor.r}, ${pantoneBaseColor.g}, ${pantoneBaseColor.b}, 0.5)`     // 默认 - 50%透明度

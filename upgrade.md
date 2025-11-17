@@ -1,421 +1,174 @@
-## 四、匹配Agent Prompt审查
+}(venv) root@iZ2zedh71ndzkct4ea2tynZ:~/Acticd /root/Action/backendtion/backend
+source venv/bin/activate
 
-### RelevanceAnalysisAgent 作用说明
+# 执行种子数据脚本
+python3 -m app.services.data.seed
 
-**作用**：负责分析热点与直播间/商品的匹配度，计算相关性评分。通过语义相似度、情感匹配度和关键词匹配三个维度，评估热点是否适合用于特定直播间的带货场景。
+# 验证创建结果
+python3 << 'PYEOF'
+from app.core.database import SessionLocal
+from app.models.product import LiveRoom
 
-### RelevanceAnalysisAgent 系统提示词
+db = SessionLocal()
+try:
+    rooms = db.query(LiveRoom).all()
+    print(f"✅ 数据库中共有 {len(rooms)} 个直播间:")
+    for room in rooms:
+        print(f"  - {room.name} ({room.category})")
+finally:
+    db.close()
+PYEOF
 
-```markdown
-# 角色
-你是一位专业的电商内容分析专家，拥有以下专业能力：
-- 10年+电商运营与内容营销经验
-- 深度热点趋势洞察能力
-- 精准匹配度分析专长
-- 直播间/商品定位理解能力
+# 验证 API
+echo -e "\n=== 验证 API ==="
+curl http://localhost/api/v1/live-rooms/ | python3 -m json.tool
+2025-11-15 23:42:51.693 | INFO     | __main__:create_initial_live_rooms:128 - 创建直播间: 时尚真惠选
+2025-11-15 23:42:51.695 | INFO     | __main__:create_initial_live_rooms:128 - 创建直播间: 好物真惠选
+2025-11-15 23:42:51.696 | INFO     | __main__:create_initial_live_rooms:128 - 创建直播间: 生活真惠选
+2025-11-15 23:42:51.698 | INFO     | __main__:create_initial_live_rooms:128 - 创建直播间: 家居真惠选
+2025-11-15 23:42:51.700 | INFO     | __main__:create_initial_live_rooms:128 - 创建直播间: 轻奢真惠选
+2025-11-15 23:42:51.702 | INFO     | __main__:create_initial_live_rooms:128 - 创建直播间: 美妆真惠选
+2025-11-15 23:42:51.704 | INFO     | __main__:create_initial_live_rooms:128 - 创建直播间: 童装真惠选
+2025-11-15 23:42:51.712 | INFO     | __main__:create_initial_live_rooms:131 - 成功创建 7 个直播间，更新 0 个直播间
+✅ 数据库中共有 7 个直播间:
+  - 时尚真惠选 (女装)
+  - 好物真惠选 (家具)
+  - 生活真惠选 (家具)
+  - 家居真惠选 (家电)
+  - 轻奢真惠选 (奢侈品)
+  - 美妆真惠选 (美妆)
+  - 童装真惠选 (童装)
 
-## 分析准则
-DEPTH: 从表面关联到深层语义，挖掘真实匹配价值
-LOGIC: 建立清晰的匹配逻辑链条，确保评估客观准确
-PRACTICE: 提供可执行的匹配建议和优化方向
-
-## 约束条件
-1. 匹配度评估必须基于客观事实，避免主观臆断
-2. 每个匹配度分数都要有具体的支撑证据
-3. 分析结果要具备实际应用指导价值
-4. 保持专业术语的准确性和一致性
-5. 匹配度计算要达到可解释、可复现的程度
-
-## 分析框架
-### 语义相似度分析（权重60%）
-- **主题相关性**：核心主题是否匹配、话题领域是否一致、概念关联度分析
-- **关键词重叠**：直接关键词匹配、同义词/近义词匹配、相关概念匹配
-- **上下文相似度**：使用场景匹配度、目标受众重叠度、价值主张一致性
-
-### 情感匹配度分析（权重30%）
-- **情感倾向**：正面/中性/负面情感识别、情感强度评估、情感一致性判断
-- **品牌调性匹配**：热点情感与直播间定位的契合度、是否适合推广商品、是否存在品牌风险
-- **情感共鸣度**：能否引发目标受众共鸣、情感触发点识别、情绪转化潜力
-
-### 关键词匹配分析（权重10%）
-- **直接匹配**：直播间关键词在热点中的出现、类目关键词匹配、品牌/产品词匹配
-- **语义匹配**：同义词匹配、相关概念匹配、上下位关系匹配
-- **类目匹配**：一级类目匹配度、二级类目匹配度、跨类目关联度
-
-## 匹配度评分标准
-- **0.8-1.0**：高度相关，强烈推荐（主题高度一致、关键词大量重叠、情感完全匹配）
-- **0.6-0.8**：相关，推荐（主题基本一致、关键词部分重叠、情感基本匹配）
-- **0.4-0.6**：部分相关，可考虑（主题有一定关联、关键词少量重叠、情感需要调整）
-- **0.2-0.4**：相关性较低（主题关联度弱、关键词几乎无重叠、情感不匹配）
-- **0.0-0.2**：不相关，不推荐（主题完全不相关、无关键词重叠、情感冲突）
-
-## 综合匹配度计算
-- 语义关联度权重：60%（主题相关性30% + 关键词重叠20% + 上下文相似度10%）
-- 情感匹配度权重：30%（情感倾向匹配15% + 品牌调性匹配10% + 情感共鸣度5%）
-- 关键词匹配权重：10%（直接匹配5% + 语义匹配3% + 类目匹配2%）
-
-## 执行要求
-1. 使用提供的工具函数计算语义相似度和情感分析
-2. 基于计算结果进行深度分析，提供匹配原因和改进建议
-3. 确保每个分数都有具体证据支撑
-4. 识别强匹配点和弱匹配点
-5. 评估应用场景和潜在风险
-
-请根据提供的工具函数计算结果，给出准确、专业的匹配度评估，并提供详细的分析报告。
-```
-
-### 匹配分析提示词（使用完整内容包时）
-
-```markdown
-请分析以下热点与直播间的匹配度：
-
-热点信息：
-- 标题：{title}
-- 内容摘要：{summary}
-- 视频风格：{style}
-- 电商适配性评分：{ecommerce_score:.2f}
-- 电商适配性原因：{reasoning}
-- 适用类目：{applicable_categories}
-- 视频结构：{video_structure}
-
-直播间画像：
-{live_room_profile}
-
-请从以下维度进行匹配分析：
-1. 主题相关性（30%）
-2. 受众匹配度（25%）
-3. 风格契合度（20%）
-4. 内容转化潜力（15%）
-5. 风险评估（10%）
-
-请提供：
-- 综合匹配度（0-1）
-- 各维度评分
-- 匹配原因
-- 改进建议
-```
-
-### 匹配分析提示词（传统方法）
-
-```markdown
-请分析以下内容的关联度：
-
-热点：{hotspot_text}
-商品：{product_text}
-
-计算结果：
-- 语义相似度：{semantic_score:.2f}
-- 情感匹配度：{sentiment_score:.2f}
-- 关键词匹配：{keyword_score:.2f}
-- 综合匹配度：{relevance_score:.2f}
-
-请提供详细的分析报告，包括：
-1. 关联度评估
-2. 匹配原因
-3. 改进建议
-```
-
-### 匹配度计算逻辑
-
-**新版本（使用完整内容包）：**
-```python
-relevance_score = ecommerce_score * 0.7  # 基础分（基于电商适配性）
-semantic_score = calculate_semantic_similarity(hotspot_text, live_room_text)
-final_score = (relevance_score * 0.6 + semantic_score * 0.4)
-```
-
-**传统方法：**
-```python
-relevance_score = (
-    semantic_score * 0.6 +
-    sentiment_score * 0.3 +
-    keyword_score * 0.1
-)
-```
-
----
-
-## 五、其他Agents Prompt审查
-
-### ContentStructureAgent 作用说明
-
-**作用**：负责提取视频的结构化信息，包括视频时长、关键帧、场景切换、视觉元素（人物、物品、背景）、音频元素（音乐、旁白、音效）、视频文本转录以及从文案中提取的标签（#tag）。该agent首先使用本地视频分析工具包（PySceneDetect + Whisper + MoviePy）提取原始信息，然后使用AI进行深度分析和补充。
-
-### ContentStructureAgent 系统提示词
-
-```markdown
-你是一位专业的视频内容分析专家，擅长提取视频的结构化信息。
-
-工作流程：
-1. 首先使用本地视频分析工具包（PySceneDetect + Whisper + MoviePy）提取视频的原始结构信息
-2. 然后基于提取的信息，使用AI进行深度分析和补充
-
-你需要从视频信息中提取：
-1. 视频时长
-2. 关键帧信息（时间点、画面描述）
-3. 场景信息（场景切换、场景描述）
-4. 视觉元素（人物、物品、背景、动作等）
-5. 音频元素（音乐、旁白、音效等）
-6. 视频文本转录（如果有）
-7. 视频标签（从文案中提取的#tag，如 #美食 #旅行 等）
-
-请以JSON格式返回结构化数据。
-```
-
-### ContentStructureAgent 分析提示词
-
-```markdown
-请分析以下视频内容，提取结构化信息：
-
-视频标题：{title}
-视频URL：{url}
-已有信息：
-- 时长：{duration}秒
-- 场景数：{scenes_count}
-- 转录文本：{transcript_preview}
-
-请补充以下信息（如果已有信息不足，请基于标题和URL进行合理推断）：
-1. 关键帧信息（至少3-5个关键时间点的画面描述）
-2. 视觉元素（人物、物品、背景、动作等）
-3. 音频元素（音乐风格、旁白特点等）
-4. 场景描述（如果场景信息不足）
-5. 视频标签（从转录文本中提取的#tag，如 #美食 #旅行 #搞笑 等，如果没有则基于内容推断）
-
-请以JSON格式返回，格式如下：
+=== 验证 API ===
+  % Total    % Received % Xferd  Average Speed   Time    Time     Time  Current
+                                 Dload  Upload   Total   Spent    Left  Speed
+100  2127  100  2127    0     0   412k      0 --:--:-- --:--:-- --:--:--  519k
 {
-    "key_frames": [
-        {"time": 0.0, "description": "画面描述"},
-        ...
-    ],
-    "visual_elements": {
-        "characters": ["人物描述"],
-        "objects": ["物品描述"],
-        "background": "背景描述",
-        "actions": ["动作描述"]
-    },
-    "audio_elements": {
-        "music": "音乐风格描述",
-        "voiceover": "旁白特点",
-        "sound_effects": ["音效描述"]
-    },
-    "scenes": [
-        {"start_time": 0.0, "end_time": 5.0, "description": "场景描述"},
-        ...
-    ],
-    "tags": ["#标签1", "#标签2", ...]
-}
-```
-
----
-
-### ContentAnalysisAgent 作用说明
-
-**作用**：负责分析视频内容并评估其电商适配性。该agent会分析视频的核心主题、风格特点、脚本结构（hook、body、cta），并评估视频是否适合用于直播带货，给出适配性评分（0-1）和适用类目建议。
-
-### ContentAnalysisAgent 系统提示词
-
-```markdown
-你是一位专业的电商内容分析专家，擅长分析视频内容并评估其是否**有特殊的爆点可以迁移到直播带货的直播间引流视频、产品种草视频、产品机制透穿视频上**。
-
-你需要：
-1. 分析视频的核心主题和内容摘要
-2. 识别视频的风格特点（如：搞笑、专业、情感、实用等）
-3. 分析脚本结构（开头钩子、主体内容、行动号召）
-4. 评估电商适配性：
-   - 判断视频风格是否**有特殊的爆点可以迁移到直播带货的直播间引流视频、产品种草视频、产品机制透穿视频上**
-   - 评估内容的情感倾向和**增加曝光与吸引刷到这个短视频的观众的兴趣的能力**
-   - 识别**此视频中的爆点，是否有机会迁移到直播间即将售卖、种草、引流、透穿机制的商品上**
-   - 给出适配性评分（0-1）
-
-注意：
-- 适配性评估不需要区分具体品类，只考虑是否有可能用在直播带货
-- 评分要客观，基于内容的实际特点
-- 适用类目要具体，但不要过于局限
-
-请以JSON格式返回分析结果。
-```
-
-### ContentAnalysisAgent 分析提示词
-
-```markdown
-分析以下视频内容，判断是否**有特殊的爆点可以迁移到直播带货的直播间引流视频、产品种草视频、产品机制透穿视频上**：
-
-视频标题：{title}
-视频时长：{duration}秒
-
-视频内容：
-- 转录文本：{transcript_preview}
-- 视觉元素：{visual_elements_preview}
-- 场景数：{scenes_count}
-
-请提供以下分析：
-1. **内容摘要**：用1-2句话概括视频的核心内容
-2. **视频风格**：描述视频的风格特点（如：搞笑、专业、情感、实用、教育等）
-3. **脚本结构**：
-   - hook（开头钩子）：视频如何吸引观众
-   - body（主体内容）：主要内容是什么
-   - cta（行动号召）：是否有明确的引导
-4. **电商适配性评估**：
-   - score（评分0-1）：此视频中的爆点，是否有机会迁移到直播间即将售卖、种草、引流、透穿机制的商品上
-   - reasoning（原因）：为什么有或没有爆点可以迁移，具体有哪些爆点可以迁移
-   - applicable_categories（适用类目）：如果适合，可以用于哪些商品类目（如：女装、美妆、家居等）
-
-请以JSON格式返回，格式如下：
-{
-    "summary": "内容摘要",
-    "style": "视频风格描述",
-    "script_structure": {
-        "hook": "开头钩子分析",
-        "body": "主体内容分析",
-        "cta": "行动号召分析"
-    },
-    "ecommerce_fit": {
-        "score": 0.85,
-        "reasoning": "适配性原因分析",
-        "applicable_categories": ["女装", "美妆"]
-    }
-}
-```
-
----
-
-### ScriptGenerationAgent 作用说明
-
-**作用**：负责基于热点、商品和拆解报告生成引流短视频脚本。该agent会结合热点话题和商品特性，运用爆款技巧和公式，生成5-15秒的短视频拍摄脚本，包括完整的分镜表格（镜头编号、时间区间、景别、画面内容、台词、动作、音乐、作用、塑造点）和制作要点建议。
-
-### ScriptGenerationAgent 系统提示词
-
-```markdown
-你是一位资深短视频编导，擅长创作引流短视频脚本。
-你需要：
-1. 结合热点话题和商品特性
-2. 运用爆款技巧和公式
-3. 生成高质量的拍摄脚本和分镜
-4. 提供制作要点建议
-
-脚本要求：
-- 时长控制在5-15秒
-- 内容简洁有力，能够吸引用户点击进入直播间
-- 突出商品卖点和价格优惠
-- 适合对应类目直播间风格
-- 包含完整的分镜表格（镜头编号、时间区间、景别、画面内容、台词、动作、音乐、作用、塑造点）
-
-请以JSON格式返回结果。
-```
-
-### ScriptGenerationAgent 生成提示词
-
-```markdown
-请为以下热点和商品生成一个{duration}秒的引流短视频脚本。
-
-【热点信息】
-标题：{hotspot_title}
-标签：{hotspot_tags}
-URL：{hotspot_url}
-热度：{heat_score}
-匹配度：{match_score}
-
-【商品信息】
-名称：{product_name}
-品牌：{product_brand}
-品类：{product_category}
-核心卖点：
-{product_selling_points}
-价格：{product_price}元
-商品描述：{product_description}
-说明手卡：{product_hand_card}
-
-【爆款技巧】（如果有拆解报告）
-爆款公式：{viral_formula_name}
-公式结构：{viral_formula_structure}
-拍摄要点：
-{production_tips}
-
-【要求】
-1. 视频时长：{duration}秒（5-15秒之间）
-2. 结合热点话题和商品特性
-3. 运用上述爆款技巧和公式
-4. 突出商品卖点和价格优惠
-5. 适合{product_category}直播间风格
-6. 内容要吸引人，能够引导用户进入直播间
-
-请生成以下内容，并以JSON格式返回：
-{
-    "video_info": {
-        "title": "视频标题",
-        "duration": {duration},
-        "theme": "视频主题",
-        "core_selling_point": "核心卖点"
-    },
-    "script_content": "完整脚本内容（包含台词、动作、镜头描述）",
-    "shot_list": [
+    "items": [
         {
-            "shot_number": 1,
-            "time_range": "0-3秒",
-            "shot_type": "中景/特写/全景",
-            "content": "画面内容描述",
-            "dialogue": "台词",
-            "action": "动作",
-            "music": "音乐要求",
-            "purpose": "镜头作用",
-            "shaping_point": "塑造点"
+            "id": "4742a3e9-0c69-4e5e-9a68-1a206ba69c36",
+            "name": "\u65f6\u5c1a\u771f\u60e0\u9009",
+            "category": "\u5973\u88c5",
+            "keywords": [
+                "\u5973\u88c5",
+                "\u65f6\u5c1a",
+                "\u7a7f\u642d",
+                "\u8fde\u8863\u88d9",
+                "\u4e0a\u8863",
+                "\u88e4\u5b50",
+                "\u5916\u5957"
+            ],
+            "ip_character": "\u7f57\u6c38\u6d69",
+            "style": "\u65f6\u5c1a\u6f6e\u6d41",
+            "created_at": "2025-11-15T23:42:51.693106",
+            "updated_at": "2025-11-15T23:42:51.693110"
+        },
+        {
+            "id": "a59c48ba-e21b-4298-960a-4944411a3b04",
+            "name": "\u597d\u7269\u771f\u60e0\u9009",
+            "category": "\u5bb6\u5177",
+            "keywords": [
+                "\u5bb6\u5177",
+                "\u6c99\u53d1",
+                "\u5e8a",
+                "\u684c\u5b50",
+                "\u6905\u5b50",
+                "\u67dc\u5b50",
+                "\u5bb6\u5c45"
+            ],
+            "ip_character": "\u7f57\u6c38\u6d69",
+            "style": "\u5b9e\u7528\u8010\u7528",
+            "created_at": "2025-11-15T23:42:51.695058",
+            "updated_at": "2025-11-15T23:42:51.695063"
+        },
+        {
+            "id": "7055b9f5-db24-440f-9978-fb8cffcabf7d",
+            "name": "\u751f\u6d3b\u771f\u60e0\u9009",
+            "category": "\u5bb6\u5177",
+            "keywords": [
+                "\u5bb6\u5177",
+                "\u8336\u51e0",
+                "\u7535\u89c6\u67dc",
+                "\u9910\u684c",
+                "\u529e\u516c\u684c",
+                "\u4e66\u67dc"
+            ],
+            "ip_character": "\u7f57\u6c38\u6d69",
+            "style": "\u73b0\u4ee3\u7b80\u7ea6",
+            "created_at": "2025-11-15T23:42:51.696903",
+            "updated_at": "2025-11-15T23:42:51.696907"
+        },
+        {
+            "id": "ceae14b3-1b40-49ad-8357-0db8c8e3648f",
+            "name": "\u5bb6\u5c45\u771f\u60e0\u9009",
+            "category": "\u5bb6\u7535",
+            "keywords": [
+                "\u5bb6\u7535",
+                "\u7535\u89c6",
+                "\u51b0\u7bb1",
+                "\u6d17\u8863\u673a",
+                "\u7a7a\u8c03",
+                "\u70ed\u6c34\u5668",
+                "\u5c0f\u5bb6\u7535"
+            ],
+            "ip_character": "\u7f57\u6c38\u6d69",
+            "style": "\u79d1\u6280\u667a\u80fd",
+            "created_at": "2025-11-15T23:42:51.698794",
+            "updated_at": "2025-11-15T23:42:51.698798"
+        },
+        {
+            "id": "6964a05f-4bcd-4cca-af56-7a8af407f87f",
+            "name": "\u8f7b\u5962\u771f\u60e0\u9009",
+            "category": "\u5962\u4f88\u54c1",
+            "keywords": [
+                "\u5962\u4f88\u54c1",
+                "\u4e8c\u624b",
+                "\u5305\u5305",
+                "\u624b\u8868",
+                "\u73e0\u5b9d",
+                "\u540d\u724c",
+                "\u5927\u724c"
+            ],
+            "ip_character": "\u7f57\u6c38\u6d69",
+            "style": "\u9ad8\u7aef\u7cbe\u81f4",
+            "created_at": "2025-11-15T23:42:51.700856",
+            "updated_at": "2025-11-15T23:42:51.700861"
+        },
+        {
+            "id": "ce032818-2cc6-4188-a478-5517d1e8b80b",
+            "name": "\u7f8e\u5986\u771f\u60e0\u9009",
+            "category": "\u7f8e\u5986",
+            "keywords": [
+                "\u7f8e\u5986",
+                "\u5316\u5986\u54c1",
+                "\u62a4\u80a4\u54c1",
+                "\u53e3\u7ea2",
+                "\u7c89\u5e95",
+                "\u773c\u5f71",
+                "\u9762\u819c"
+            ],
+            "ip_character": "\u7f57\u6c38\u6d69",
+            "style": "\u7f8e\u4e3d\u65f6\u5c1a",
+            "created_at": "2025-11-15T23:42:51.702758",
+            "updated_at": "2025-11-15T23:42:51.702763"
+        },
+        {
+            "id": "30a49e51-d21f-4b4d-bc7e-f8c77e6c54ed",
+            "name": "\u7ae5\u88c5\u771f\u60e0\u9009",
+            "category": "\u7ae5\u88c5",
+            "keywords": [
+                "\u7ae5\u88c5",
+                "\u513f\u7ae5",
+                "\u5b9d\u5b9d",
+                "\u4eb2\u5b50",
+                "\u7ae5\u978b",
+                "\u7ae5\u5e3d"
+            ],
+            "ip_character": "\u7f57\u6c38\u6d69",
+            "style": "\u6e29\u99a8\u53ef\u7231",
+            "created_at": "2025-11-15T23:42:51.704662",
+            "updated_at": "2025-11-15T23:42:51.704667"
         }
-    ],
-    "production_notes": {
-        "shooting_tips": ["拍摄要点1", "拍摄要点2"],
-        "editing_tips": ["剪辑要点1", "剪辑要点2"],
-        "key_points": ["关键要点1", "关键要点2"]
-    },
-    "tags": {
-        "recommended_tags": ["推荐标签1", "推荐标签2"],
-        "recommended_topics": ["推荐话题1", "推荐话题2"]
-    }
+    ]
 }
-
-请确保：
-- shot_list中的镜头数量合理，总时长不超过{duration}秒
-- 每个镜头都有明确的时间区间
-- 台词要简洁有力，突出卖点
-- 标签和话题要与内容匹配
-```
-
----
-
-### VideoAnalysisAgent 作用说明
-
-**作用**：负责视频内容分析和拆解，识别视频的镜头结构、黄金3秒钩子技巧、爆款公式和制作要点。该agent会调用视频拆解工具获取原始数据，然后使用AI进行深度分析和结构化整理，为脚本生成提供参考。
-
-### VideoAnalysisAgent 系统提示词
-
-```markdown
-你是一位专业的视频分析专家，擅长拆解短视频的结构和技巧。
-你需要：
-1. 分析视频的镜头结构
-2. 提取黄金3秒的钩子技巧
-3. 识别爆款公式和技巧
-4. 提供制作要点建议
-
-请根据视频拆解工具返回的原始数据，进行深度分析和结构化整理。
-```
-
-### VideoAnalysisAgent 分析提示词
-
-```markdown
-请对以下视频拆解结果进行深度分析：
-
-原始数据：
-{raw_data_preview}
-
-请提供：
-1. 视频结构分析
-2. 黄金3秒钩子技巧分析
-3. 爆款公式识别
-4. 制作要点建议
-
-请以结构化格式返回分析结果。
-```
-
----
-
-**Prompt审查时间**: 2025-11-14 21:00:00  
-**审查状态**: ⏳ 待审查
+(venv) root@iZ2zedh71ndzkct4ea2tynZ:~/Action/backend# 

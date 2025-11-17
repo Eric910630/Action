@@ -52,6 +52,11 @@ opencv-python>=4.8.0  # 图像处理（PySceneDetect依赖）
 # 网页内容提取工具
 trafilatura>=1.6.0  # 网页主要内容提取（替代Firecrawl的免费方案）
 lxml_html_clean>=0.4.0  # Trafilatura的依赖
+beautifulsoup4>=4.12.0  # HTML解析（用于小红书爬虫，参考BettaFish实现）
+lxml>=5.0.0  # BeautifulSoup的快速解析器
+
+# PDF生成工具
+reportlab>=4.0.0  # PDF生成库（用于脚本导出PDF功能）
 
 # 开发工具
 pytest==8.3.3

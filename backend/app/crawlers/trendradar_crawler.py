@@ -103,9 +103,11 @@ class TrendRadarCrawler(BaseCrawler):
             }
         
         headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+            "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             "Accept": "application/json, text/plain, */*",
-            "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+            "Accept-Language": "zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7",
+            "Referer": "https://newsnow.busiyi.world/",  # 添加Referer防止403
+            "Origin": "https://newsnow.busiyi.world",     # 添加Origin防止403
             "Connection": "keep-alive",
             "Cache-Control": "no-cache",
         }
@@ -170,11 +172,28 @@ class TrendRadarCrawler(BaseCrawler):
         platform_id = self._get_platform_id(platform)
         logger.info(f"开始爬取 {platform} (ID: {platform_id}) 的热点数据")
         
+        # 注意：小红书平台应该使用 XiaohongshuCrawler，不应该调用这里
+        # 这里保留检查，以防万一
+        if platform_id == "xiaohongshu":
+            logger.warning(f"TrendRadar API不支持小红书平台，应该使用XiaohongshuCrawler")
+            return []
+        
         # 调用 API 获取数据
         data, _ = await self._fetch_data_async(platform_id)
         
         if not data:
             logger.warning(f"未能获取 {platform} 的热点数据")
+            # 如果直接爬虫失败，尝试降级到TrendRadarClient（可能使用MCP或Mock数据）
+            try:
+                from app.utils.trendradar import TrendRadarClient
+                logger.info(f"尝试降级到TrendRadarClient获取 {platform} 的热点")
+                client = TrendRadarClient()
+                fallback_hotspots = await client.get_hotspots(platform, date)
+                if fallback_hotspots:
+                    logger.info(f"降级方案成功，获取到 {len(fallback_hotspots)} 个热点")
+                    return fallback_hotspots
+            except Exception as e:
+                logger.debug(f"降级方案也失败: {e}")
             return []
         
         # 解析数据
