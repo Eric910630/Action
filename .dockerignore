@@ -1,0 +1,20 @@
+# 前端（后端Docker不需要）
+frontend/
+
+# 文档（不需要）
+docs/
+
+# 脚本（不需要）
+scripts/
+
+# Docker配置（不需要）
+docker/
+
+# Git
+.git/
+.gitignore
+
+# 其他
+*.md
+.DS_Store
+
