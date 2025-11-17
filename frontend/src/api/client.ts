@@ -21,6 +21,11 @@ apiClient.interceptors.request.use(
 // 响应拦截器
 apiClient.interceptors.response.use(
   (response) => {
+    // 对于blob响应（如PDF导出），直接返回response对象，让调用方处理response.data
+    if (response.config.responseType === 'blob') {
+      return response
+    }
+    // 对于JSON响应，返回data
     return response.data
   },
   (error) => {

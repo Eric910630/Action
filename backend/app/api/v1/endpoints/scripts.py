@@ -415,11 +415,17 @@ async def export_script_pdf(
     buffer.seek(0)
     
     # 返回PDF文件
+    # 处理文件名编码：使用URL编码确保中文字符正确传输
+    import urllib.parse
+    safe_title = urllib.parse.quote(title.encode('utf-8'))
+    filename = f"脚本_{safe_title}.pdf"
+    
     return Response(
         content=buffer.getvalue(),
         media_type="application/pdf",
         headers={
-            "Content-Disposition": f"attachment; filename=脚本_{title}.pdf"
+            "Content-Disposition": f"attachment; filename*=UTF-8''{filename}",
+            "Content-Type": "application/pdf"
         }
     )
 

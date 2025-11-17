@@ -1334,13 +1334,37 @@ const handleExportPDF = async (script: Script) => {
     ElMessage.info('正在生成PDF，请稍候...')
     const response = await scriptsApi.exportPDF(script.id)
     
+    // 处理blob响应：response是完整的axios响应对象，response.data是blob
+    const blob = response.data instanceof Blob 
+      ? response.data 
+      : new Blob([response.data], { type: 'application/pdf' })
+    
+    // 从响应头获取文件名，如果没有则使用默认名称
+    let filename = '脚本.pdf'
+    const contentDisposition = response.headers['content-disposition'] || response.headers['Content-Disposition']
+    if (contentDisposition) {
+      // 尝试匹配 RFC 5987 格式：filename*=UTF-8''encoded-filename
+      const utf8Match = contentDisposition.match(/filename\*=UTF-8''(.+)/i)
+      if (utf8Match) {
+        filename = decodeURIComponent(utf8Match[1])
+      } else {
+        // 尝试匹配标准格式：filename="filename" 或 filename=filename
+        const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/)
+        if (filenameMatch && filenameMatch[1]) {
+          filename = decodeURIComponent(filenameMatch[1].replace(/['"]/g, ''))
+        }
+      }
+    } else {
+      // 如果没有从响应头获取到文件名，使用脚本标题
+      const title = script.video_info?.title || script.id
+      filename = `脚本_${title}.pdf`
+    }
+    
     // 创建下载链接
-    const blob = new Blob([response], { type: 'application/pdf' })
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
     link.href = url
-    const title = script.video_info?.title || script.id
-    link.download = `脚本_${title}.pdf`
+    link.download = filename
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -1348,7 +1372,28 @@ const handleExportPDF = async (script: Script) => {
     
     ElMessage.success('PDF导出成功')
   } catch (error: any) {
-    ElMessage.error('PDF导出失败: ' + (error.response?.data?.detail || error.message))
+    console.error('PDF导出错误:', error)
+    // 尝试从错误响应中获取详细信息
+    let errorMessage = 'PDF导出失败'
+    if (error.response) {
+      // 如果是blob错误响应，尝试解析JSON
+      if (error.response.data instanceof Blob) {
+        error.response.data.text().then((text: string) => {
+          try {
+            const errorData = JSON.parse(text)
+            ElMessage.error(`PDF导出失败: ${errorData.detail || errorMessage}`)
+          } catch {
+            ElMessage.error(`PDF导出失败: ${error.response.status} ${error.response.statusText}`)
+          }
+        })
+        return
+      } else {
+        errorMessage = error.response.data?.detail || error.response.statusText || errorMessage
+      }
+    } else {
+      errorMessage = error.message || errorMessage
+    }
+    ElMessage.error(`PDF导出失败: ${errorMessage}`)
   }
 }
 
